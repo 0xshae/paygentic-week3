@@ -4,15 +4,21 @@ import path from "path";
 const DB_PATH = path.resolve(process.cwd(), "agentic_checkout.db");
 
 const db: DatabaseType = new Database(DB_PATH);
-
-// ── WAL mode for concurrent reads ───────────────────
 db.pragma("journal_mode = WAL");
 
-// ── Nullifier tracking (World ID Sybil Shield) ──────
+// ── AgentKit usage tracking ─────────────────────────
 db.exec(`
-  CREATE TABLE IF NOT EXISTS nullifier_usage (
-    nullifier_hash TEXT PRIMARY KEY,
-    used_at        INTEGER NOT NULL
+  CREATE TABLE IF NOT EXISTS agentkit_usage (
+    endpoint   TEXT    NOT NULL,
+    human_id   TEXT    NOT NULL,
+    count      INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (endpoint, human_id)
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS agentkit_nonces (
+    nonce TEXT PRIMARY KEY
   );
 `);
 
@@ -20,7 +26,7 @@ db.exec(`
 db.exec(`
   CREATE TABLE IF NOT EXISTS transactions (
     short_code      TEXT PRIMARY KEY,
-    nullifier_hash  TEXT,
+    human_id        TEXT,
     amount          TEXT NOT NULL,
     currency        TEXT NOT NULL DEFAULT 'USDC',
     status          TEXT NOT NULL DEFAULT 'SETTLED',
@@ -30,28 +36,51 @@ db.exec(`
   );
 `);
 
-// ── Nullifier helpers ───────────────────────────────
+// ── AgentKitStorage impl (SQLite-backed) ────────────
 
-const _hasNullifier = db.prepare(
-  "SELECT 1 FROM nullifier_usage WHERE nullifier_hash = ?"
+const _getUsage = db.prepare(
+  "SELECT count FROM agentkit_usage WHERE endpoint = ? AND human_id = ?"
+);
+const _tryIncrement = db.transaction((endpoint: string, humanId: string, limit: number) => {
+  const row = _getUsage.get(endpoint, humanId) as { count: number } | undefined;
+  const current = row?.count ?? 0;
+  if (current >= limit) return false;
+  db.prepare(`
+    INSERT INTO agentkit_usage (endpoint, human_id, count)
+    VALUES (?, ?, 1)
+    ON CONFLICT(endpoint, human_id) DO UPDATE SET count = count + 1
+  `).run(endpoint, humanId);
+  return true;
+});
+const _hasNonce = db.prepare(
+  "SELECT 1 FROM agentkit_nonces WHERE nonce = ?"
+);
+const _recordNonce = db.prepare(
+  "INSERT OR IGNORE INTO agentkit_nonces (nonce) VALUES (?)"
 );
 
-const _insertNullifier = db.prepare(
-  "INSERT OR IGNORE INTO nullifier_usage (nullifier_hash, used_at) VALUES (?, ?)"
-);
+/**
+ * SQLite-backed AgentKitStorage for persistent usage tracking.
+ * Implements the @worldcoin/agentkit AgentKitStorage interface.
+ */
+export class SqliteAgentKitStorage {
+  async tryIncrementUsage(endpoint: string, humanId: string, limit: number): Promise<boolean> {
+    return _tryIncrement(endpoint, humanId, limit);
+  }
 
-export function hasNullifier(hash: string): boolean {
-  return !!_hasNullifier.get(hash);
-}
+  async hasUsedNonce(nonce: string): Promise<boolean> {
+    return !!_hasNonce.get(nonce);
+  }
 
-export function markNullifier(hash: string): void {
-  _insertNullifier.run(hash, Date.now());
+  async recordNonce(nonce: string): Promise<void> {
+    _recordNonce.run(nonce);
+  }
 }
 
 // ── Transaction helpers ─────────────────────────────
 
 const _insertTx = db.prepare(`
-  INSERT INTO transactions (short_code, nullifier_hash, amount, currency, status, agent_id, created_at)
+  INSERT INTO transactions (short_code, human_id, amount, currency, status, agent_id, created_at)
   VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
@@ -63,7 +92,7 @@ const _revokeTx = db.prepare(
 
 export interface TransactionRecord {
   short_code: string;
-  nullifier_hash: string | null;
+  human_id: string | null;
   amount: string;
   currency: string;
   status: string;
@@ -74,13 +103,13 @@ export interface TransactionRecord {
 
 export function insertTransaction(tx: {
   shortCode: string;
-  nullifierHash: string | null;
+  humanId: string | null;
   amount: string;
   agentId: string | null;
 }): void {
   _insertTx.run(
     tx.shortCode,
-    tx.nullifierHash,
+    tx.humanId,
     tx.amount,
     "USDC",
     "SETTLED",
