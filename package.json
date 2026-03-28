@@ -1,7 +1,7 @@
 {
   "name": "agentic-checkout",
-  "version": "1.0.0",
-  "description": "Headless merchant template for the agentic economy — x402 payments, World ID verification, XMTP audit rail.",
+  "version": "2.0.0",
+  "description": "The Agentic Door — a headless checkout gateway for the agentic economy. World ID + x402 + XMTP.",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
@@ -9,10 +9,14 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["x402", "worldid", "xmtp", "agentic", "checkout"],
+  "keywords": ["x402", "worldid", "agentkit", "xmtp", "agentic", "checkout", "gateway"],
   "license": "MIT",
   "dependencies": {
-    "x402-express": "^0.1.0",
+    "@x402/express": "^2.8.0",
+    "@x402/evm": "^2.8.0",
+    "@x402/core": "^2.8.0",
+    "@worldcoin/agentkit": "^0.1.0",
+    "@xmtp/agent-sdk": "^2.2.0",
     "better-sqlite3": "^11.0.0",
     "dotenv": "^16.4.0",
     "express": "^4.21.0",
