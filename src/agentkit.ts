@@ -7,8 +7,6 @@ import {
 import type { AgentkitHookEvent } from "@worldcoin/agentkit";
 import { SqliteAgentKitStorage } from "./db";
 import { config } from "./config";
-import { sendAuditMessage } from "./services/xmtp";
-
 // ── AgentBook verifier (World Chain registry) ───────
 export const agentBook = createAgentBookVerifier();
 
@@ -28,19 +26,8 @@ export const agentkitHooks = createAgentkitHooks({
   onEvent: (event: AgentkitHookEvent) => {
     console.info(`[AgentKit] Event: ${event.type}`, JSON.stringify(event));
 
-    // Fire XMTP audit on successful verification
     if (event.type === "agent_verified" || event.type === "discount_applied") {
-      const amount = event.type === "discount_applied"
-        ? "$0.01"
-        : config.botPrice;
-
-      sendAuditMessage({
-        amount,
-        agentId: "address" in event ? event.address : null,
-        humanId: "humanId" in event ? event.humanId : null,
-      }).catch((err) => {
-        console.error("[AgentKit] Failed to send XMTP audit:", err);
-      });
+      console.info(`[AgentKit] User passed verification. Event: ${event.type}`);
     }
   },
 });

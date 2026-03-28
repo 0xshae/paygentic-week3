@@ -16,7 +16,8 @@ import {
   getAgentkitExtension,
 } from "./agentkit";
 import { sendAuditMessage } from "./services/xmtp";
-import { getTransaction, revokeTransaction } from "./db";
+import { getTransaction, revokeTransaction, insertTransaction } from "./db";
+import { nanoid } from "nanoid";
 
 const app = express();
 app.use(express.json());
@@ -78,36 +79,76 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────
-// GET /checkout — The Agentic Door
+// GET /checkout — Authorization (The Agentic Door)
 // ─────────────────────────────────────────────────────
 
-app.get("/checkout", async (req: Request, res: Response) => {
+app.get("/checkout", (req: Request, res: Response) => {
   // If we reach here, x402 payment was verified
   const agentId = req.headers["x-agent-id"] as string | undefined;
 
-  // Fire XMTP audit (non-blocking)
-  const auditResult = await sendAuditMessage({
+  // Generate short code and persist transaction immediately
+  const short_code = nanoid(10);
+  insertTransaction({
+    shortCode: short_code,
+    humanId: null,
+    amount: config.botPrice,
+    agentId: agentId || null,
+  });
+
+  // Fire XMTP audit asynchronously (non-blocking)
+  sendAuditMessage({
+    shortCode: short_code,
     amount: config.botPrice,
     agentId: agentId || null,
     humanId: null,
-  });
+  }).catch(console.error);
 
   res.status(200).json({
     status: "SETTLED",
-    product: {
-      name: "Agentic Checkout — Premium Access",
-      description: "You have unlocked premium content via the Agentic Door.",
-    },
     transaction: {
       amount: config.botPrice,
       currency: config.asset,
       network: config.baseSepolia,
-      short_code: auditResult?.shortCode || null,
+      short_code: short_code,
     },
     gateway: {
       name: "Agentic Checkout",
       version: "2.0.0",
     },
+    message: "Payment verified. Use the short_code as a Bearer token to access /premium-data",
+  });
+});
+
+// ─────────────────────────────────────────────────────
+// GET /premium-data — Content Consumption
+// ─────────────────────────────────────────────────────
+
+app.get("/premium-data", (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Unauthorized: Missing Bearer token" });
+    return;
+  }
+  
+  const token = authHeader.split(" ")[1];
+  const tx = getTransaction(token);
+  
+  if (!tx) {
+    res.status(401).json({ error: "Unauthorized: Invalid token" });
+    return;
+  }
+  
+  if (tx.revoked === 1) {
+    res.status(403).json({ error: "Access revoked by human owner." });
+    return;
+  }
+  
+  res.status(200).json({
+    status: "SUCCESS",
+    data: {
+      metrics: "Top Secret Alpha Metrics",
+      art: "\\n  _._     _,-'\"\"`-._\\n (,-.`._,'(       |\\`-e/|\\n     `-.-' \\ )-'( , o o)\\n           `-    \\`_`\"'-\\n      "
+    }
   });
 });
 

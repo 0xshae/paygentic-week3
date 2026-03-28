@@ -22,20 +22,12 @@ export interface AuditPayload {
  * Fire-and-forget: errors are logged but never throw.
  */
 export async function sendAuditMessage(opts: {
+  shortCode: string;
   recipientAddress?: string;
   amount: string;
   agentId: string | null;
   humanId: string | null;
-}): Promise<{ shortCode: string; payload: AuditPayload } | null> {
-  const shortCode = nanoid(10);
-
-  // Record the transaction in SQLite
-  insertTransaction({
-    shortCode,
-    humanId: opts.humanId,
-    amount: opts.amount,
-    agentId: opts.agentId,
-  });
+}): Promise<void> {
 
   const payload: AuditPayload = {
     type: "AGENT_TRANSACTION",
@@ -43,8 +35,8 @@ export async function sendAuditMessage(opts: {
     cost: opts.amount,
     currency: "USDC",
     status: "SETTLED",
-    short_code: shortCode,
-    revoke_url: `http://localhost:${config.port}/revoke?code=${shortCode}`,
+    short_code: opts.shortCode,
+    revoke_url: `http://localhost:${config.port}/revoke?code=${opts.shortCode}`,
   };
 
   const recipient = opts.recipientAddress || config.xmtpRecipientAddress;
@@ -53,7 +45,7 @@ export async function sendAuditMessage(opts: {
   if (!config.xmtpWalletKey || !recipient) {
     console.info("[XMTP] Credentials not configured — logging audit locally");
     console.info("[XMTP] Payload:", JSON.stringify(payload, null, 2));
-    return { shortCode, payload };
+    return;
   }
 
   try {
@@ -70,11 +62,9 @@ export async function sendAuditMessage(opts: {
     await dm.sendText(JSON.stringify(payload));
     await agent.stop();
 
-    console.info(`[XMTP] Audit sent to ${recipient} | code=${shortCode}`);
+    console.info(`[XMTP] Audit sent to ${recipient} | code=${opts.shortCode}`);
   } catch (err) {
     console.error("[XMTP] Failed to send audit message:", err);
     // Non-fatal — transaction is already recorded in SQLite
   }
-
-  return { shortCode, payload };
 }
