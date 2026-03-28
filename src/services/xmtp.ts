@@ -18,21 +18,21 @@ export interface AuditPayload {
 /**
  * Sends an audit message over XMTP to the human owner.
  *
- * This is fire-and-forget: errors are logged but never throw.
- * Uses the XMTP Node SDK with TextCodec.
+ * Records the transaction in SQLite first, then attempts XMTP delivery.
+ * Fire-and-forget: errors are logged but never throw.
  */
 export async function sendAuditMessage(opts: {
   recipientAddress?: string;
   amount: string;
   agentId: string | null;
-  nullifierHash: string | null;
+  humanId: string | null;
 }): Promise<{ shortCode: string; payload: AuditPayload } | null> {
   const shortCode = nanoid(10);
 
   // Record the transaction in SQLite
   insertTransaction({
     shortCode,
-    nullifierHash: opts.nullifierHash,
+    humanId: opts.humanId,
     amount: opts.amount,
     agentId: opts.agentId,
   });
@@ -49,37 +49,31 @@ export async function sendAuditMessage(opts: {
 
   const recipient = opts.recipientAddress || config.xmtpRecipientAddress;
 
-  // ── XMTP delivery ────────────────────────────────
-  // The XMTP client requires env keys. In demo mode we log the payload
-  // and skip if credentials are not configured.
-  if (!config.xmtpPrivateKey || !recipient) {
+  // ── XMTP delivery via @xmtp/agent-sdk ─────────────
+  if (!config.xmtpWalletKey || !recipient) {
     console.info("[XMTP] Credentials not configured — logging audit locally");
     console.info("[XMTP] Payload:", JSON.stringify(payload, null, 2));
     return { shortCode, payload };
   }
 
   try {
-    // Dynamic import to avoid crashing if @xmtp/node-sdk is not installed
-    // @ts-ignore — optional dependency, gracefully degrades
-    const xmtp = await import("@xmtp/node-sdk");
+    const { Agent, createUser, createSigner } = await import("@xmtp/agent-sdk");
 
-    // Create a signer from the private key
-    const key = config.xmtpPrivateKey.startsWith("0x")
-      ? config.xmtpPrivateKey.slice(2)
-      : config.xmtpPrivateKey;
-    const keyBytes = Buffer.from(key, "hex");
+    const user = createUser(config.xmtpWalletKey as `0x${string}`);
+    const signer = createSigner(user);
 
-    const client = await (xmtp as any).Client.create(keyBytes, {
-      env: "production",
+    const agent = await Agent.create(signer, {
+      env: config.xmtpEnv as "dev" | "production" | "local",
     });
 
-    const conversation = await client.conversations.newDm(recipient);
-    await conversation.send(JSON.stringify(payload));
+    const dm = await agent.createDmWithAddress(recipient as `0x${string}`);
+    await dm.sendText(JSON.stringify(payload));
+    await agent.stop();
 
     console.info(`[XMTP] Audit sent to ${recipient} | code=${shortCode}`);
   } catch (err) {
     console.error("[XMTP] Failed to send audit message:", err);
-    // Non-fatal — the transaction is already recorded in SQLite
+    // Non-fatal — transaction is already recorded in SQLite
   }
 
   return { shortCode, payload };
