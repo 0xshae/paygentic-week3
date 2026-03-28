@@ -28,9 +28,12 @@ const PRIVATE_KEY = process.env.EVM_PRIVATE_KEY as `0x${string}`;
 
 if (!PRIVATE_KEY) {
   console.error("❌ Missing EVM_PRIVATE_KEY environment variable");
-  console.error("   Usage: EVM_PRIVATE_KEY=0x... npx tsx scripts/agent-client.ts");
+  console.error("   Usage: EVM_PRIVATE_KEY=0x... npx tsx scripts/agent-client.ts [--human]");
   process.exit(1);
 }
+
+// Check for --human flag
+const isHuman = process.argv.includes("--human");
 
 async function main() {
   console.log(`
@@ -38,6 +41,7 @@ async function main() {
 ║  🤖  AGENTIC CLIENT — Demo Agent                ║
 ║──────────────────────────────────────────────────║
 ║  Gateway: ${GATEWAY_URL.padEnd(38)}║
+║  Mode:    ${(isHuman ? "Human 👤 (Discount)" : "Bot 🤖 (Full Price)").padEnd(38)}║
 ╚══════════════════════════════════════════════════╝
   `);
 
@@ -56,41 +60,70 @@ async function main() {
   console.log(`\n📡 Requesting: GET ${GATEWAY_URL}/checkout`);
   console.log("   (x402 will handle 402 → payment → retry automatically)\n");
 
+  let shortCode: string;
+
   try {
+    const headers: Record<string, string> = {
+      "x-agent-id": `demo-agent-${signer.address.slice(0, 8)}`,
+    };
+
+    if (isHuman) {
+      headers["x-world-id-proof"] = "mock-valid-proof";
+    }
+
     const response = await fetchWithPayment(`${GATEWAY_URL}/checkout`, {
       method: "GET",
-      headers: {
-        "x-agent-id": `demo-agent-${signer.address.slice(0, 8)}`,
-      },
+      headers,
     });
 
     const body = await response.json();
 
     if (response.ok) {
-      console.log("✅ Checkout successful!\n");
-      console.log("📦 Product:", JSON.stringify(body.product, null, 2));
+      console.log("✅ Checkout successful! Transaction settled.\n");
       console.log("💳 Transaction:", JSON.stringify(body.transaction, null, 2));
 
-      // Check for payment receipt in headers
-      const httpClient = new x402HTTPClient(client);
-      const paymentResponse = httpClient.getPaymentSettleResponse(
-        (name) => response.headers.get(name)
-      );
-      if (paymentResponse) {
-        console.log("🧾 Payment receipt:", JSON.stringify(paymentResponse, null, 2));
+      shortCode = body.transaction?.short_code;
+      if (!shortCode) {
+        throw new Error("No short_code returned from checkout");
       }
 
       // Show revoke URL if short_code exists
-      if (body.transaction?.short_code) {
-        console.log(`\n🔗 Revoke URL: ${GATEWAY_URL}/revoke?code=${body.transaction.short_code}`);
-      }
+      console.log(`\n🔗 Revoke URL: ${GATEWAY_URL}/revoke?code=${shortCode}\n`);
     } else {
       console.log(`❌ Request failed with status ${response.status}`);
       console.log("   Response:", JSON.stringify(body, null, 2));
+      return;
     }
   } catch (error) {
-    console.error("❌ Error:", error);
+    console.error("❌ Error during checkout:", error);
+    return;
   }
+
+  // ── Step 4: Poll Premium Data ──────────────────────
+  console.log(`\n🔄 Polling GET ${GATEWAY_URL}/premium-data with Bearer ${shortCode}...`);
+  console.log(`   (Hit the Revoke URL above to instantly kill this agent!)`);
+
+  setInterval(async () => {
+    try {
+      const res = await fetch(`${GATEWAY_URL}/premium-data`, {
+        headers: {
+          Authorization: `Bearer ${shortCode}`
+        }
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        process.stdout.write(`✅ [${new Date().toISOString()}] Data fetched! Metrics: ${data.data.metrics}\n`);
+      } else if (res.status === 403) {
+        console.error(`\n🚫 [403 FORBIDDEN] Access revoked by human owner!\n   Server message: ${data.error}\n`);
+        process.exit(1);
+      } else {
+        console.error(`\n⚠️ Unexpected status: ${res.status}`, data);
+      }
+    } catch (e: any) {
+      console.error(`\n❌ Fetch error:`, e.message);
+    }
+  }, 3000);
 }
 
 main().catch(console.error);
