@@ -1,8 +1,12 @@
 {
-  "name": "agentic-checkout",
-  "version": "2.0.0",
-  "description": "The Agentic Door — a headless checkout gateway for the agentic economy. World ID + x402 + XMTP.",
-  "main": "dist/index.js",
+  "name": "@glide-gateway/core",
+  "version": "1.0.0",
+  "description": "Middleware that verifies World ID and unlocks payments for human-backed agent requests.",
+  "main": "dist/lib.js",
+  "types": "dist/lib.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "demo:bot": "npx tsx scripts/demo-bot.ts",
@@ -10,7 +14,8 @@
     "demo:premium": "npx tsx scripts/demo-premium.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "x402",
