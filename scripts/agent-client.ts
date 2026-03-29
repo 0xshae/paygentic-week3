@@ -68,7 +68,8 @@ async function main() {
     };
 
     if (isHuman) {
-      headers["x-world-id-proof"] = "mock-valid-proof";
+      console.log("ℹ️  Note: To use the 99% human discount, this wallet must be registered!");
+      console.log("   Run: npx @worldcoin/agentkit-cli register " + signer.address + "\\n");
     }
 
     const response = await fetchWithPayment(`${GATEWAY_URL}/checkout`, {
