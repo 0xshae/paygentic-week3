@@ -54,7 +54,20 @@ const routes = {
         payTo: config.merchantWallet,
       },
     ],
-    description: "Glide Gateway — Human-Aware Payment Middleware",
+    description: "Glide Gateway — Bot Tier ($1.00 USDC)",
+    mimeType: "application/json",
+    extensions: getAgentkitExtension(),
+  },
+  "GET /checkout-premium": {
+    accepts: [
+      {
+        scheme: "exact" as const,
+        price: config.premiumPrice,    // $0.50 — Premium Tier
+        network: config.baseSepolia,
+        payTo: config.merchantWallet,
+      },
+    ],
+    description: "Glide Gateway — Premium Tier ($0.50 USDC + World ID)",
     mimeType: "application/json",
     extensions: getAgentkitExtension(),
   },
@@ -122,6 +135,48 @@ app.get("/checkout", (req: Request, res: Response) => {
       version: "3.0.0",
     },
     message: "Payment verified. Use the short_code as a Bearer token to access /premium-data",
+  });
+});
+
+// ─────────────────────────────────────────────────────
+// GET /checkout-premium — Premium Tier (World ID + $0.50)
+// ─────────────────────────────────────────────────────
+
+app.get("/checkout-premium", (req: Request, res: Response) => {
+  const agentId = req.headers["x-agent-id"] as string | undefined;
+  const worldIdProof = req.headers["x-world-id-proof"] as string | undefined;
+
+  const short_code = nanoid(10);
+  insertTransaction({
+    shortCode: short_code,
+    humanId: worldIdProof ? agentId || "verified-human" : null,
+    amount: config.premiumPrice,
+    agentId: agentId || null,
+  });
+
+  const txRecord = getTransaction(short_code);
+  if (txRecord) eventBus.emit("transaction", txRecord);
+
+  sendAuditMessage({
+    shortCode: short_code,
+    amount: config.premiumPrice,
+    agentId: agentId || null,
+    humanId: worldIdProof ? "verified" : null,
+  }).catch(console.error);
+
+  res.status(200).json({
+    status: "SETTLED",
+    tier: "premium",
+    priority: "instant",
+    verified: !!worldIdProof,
+    transaction: {
+      amount: config.premiumPrice,
+      currency: config.asset,
+      network: config.baseSepolia,
+      short_code: short_code,
+    },
+    gateway: { name: "Glide", version: "3.0.0" },
+    message: "Premium tier — World ID verified + payment settled on-chain.",
   });
 });
 

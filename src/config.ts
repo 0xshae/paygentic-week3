@@ -10,6 +10,8 @@ export const config = {
   // ── Pricing (Identity-Aware) ──────────────────────
   // Full price for unverified agents ("Bot Tax")
   botPrice: "$1.00",
+  // Premium price for World ID + Payment tier
+  premiumPrice: "$0.50",
   // AgentKit `free-trial` mode gives verified humans 3 free requests
   freeTrialUses: 3,
   asset: "USDC",

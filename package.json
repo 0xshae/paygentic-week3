@@ -5,7 +5,9 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "agent:demo": "npx tsx scripts/agent-client.ts",
+    "demo:bot": "npx tsx scripts/demo-bot.ts",
+    "demo:human": "npx tsx scripts/demo-human.ts",
+    "demo:premium": "npx tsx scripts/demo-premium.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"

@@ -35,15 +35,19 @@ npm run dev             # Gateway at http://localhost:4021
 
 ## Run the Demo
 
+We have 3 distinct scripts to showcase the on-chain transactions and World ID bypass.
+
 ```bash
-# In a second terminal — runs all 3 tiers back-to-back
-npx tsx scripts/agent-client.ts
+# Terminal 1 — Start the Gateway
+npm run dev
+
+# Terminal 2 — Run the Demos
+npm run demo:bot      # Hits /checkout (no World ID) → pays $1.00 USDC on-chain
+npm run demo:human    # Hits /api/generate (with World ID) → instant, FREE access
+npm run demo:premium  # Hits /checkout-premium (World ID + Pay) → pays $0.50 USDC on-chain
 ```
 
-The demo calls the same `/api/generate` endpoint three times:
-1. **No World ID** → throttled 2s, low-priority response
-2. **With World ID** → instant, free, high-quality
-3. **World ID + Payment** → instant, premium, ultra-quality
+Watch your terminal log the **real Base Sepolia transaction hashes** for the bot and premium tiers, while the human tier glides through instantly.
 
 ## Integration (2 Lines of Code)
 
