@@ -1,13 +1,8 @@
 /**
  * 🤖 Agentic Checkout — Demo Agent Client
  *
- * This script simulates an AI agent hitting the /checkout endpoint.
- * It demonstrates the full x402 payment flow:
- *
- *   1. Agent requests GET /checkout
- *   2. Server returns 402 Payment Required
- *   3. x402 client automatically signs payment + retries
- *   4. Server returns 200 + product payload
+ * Simulates an AI agent purchasing premium data through the gateway.
+ * Demonstrates the full x402 payment flow with live polling and revocation.
  *
  * Usage:
  *   EVM_PRIVATE_KEY=0x... npx tsx scripts/agent-client.ts
@@ -28,37 +23,37 @@ const PRIVATE_KEY = process.env.EVM_PRIVATE_KEY as `0x${string}`;
 
 if (!PRIVATE_KEY) {
   console.error("❌ Missing EVM_PRIVATE_KEY environment variable");
-  console.error("   Usage: EVM_PRIVATE_KEY=0x... npx tsx scripts/agent-client.ts [--human]");
+  console.error("   Usage: EVM_PRIVATE_KEY=0x... npx tsx scripts/agent-client.ts");
   process.exit(1);
 }
 
-// Check for --human flag
-const isHuman = process.argv.includes("--human");
-
 async function main() {
-  console.log(`
-╔══════════════════════════════════════════════════╗
-║  🤖  AGENTIC CLIENT — Demo Agent                ║
-║──────────────────────────────────────────────────║
-║  Gateway: ${GATEWAY_URL.padEnd(38)}║
-║  Mode:    ${(isHuman ? "Human 👤 (Discount)" : "Bot 🤖 (Full Price)").padEnd(38)}║
-╚══════════════════════════════════════════════════╝
-  `);
-
   // ── Step 1: Create wallet signer ──────────────────
   const signer = privateKeyToAccount(PRIVATE_KEY);
-  console.log(`🔑 Agent wallet: ${signer.address}`);
+
+  console.log(`
+╔══════════════════════════════════════════════════════════╗
+║  🤖  AGENTIC GATEWAY — Agent Client                     ║
+║──────────────────────────────────────────────────────────║
+║  Gateway:   ${GATEWAY_URL.padEnd(44)}║
+║  Wallet:    ${signer.address.padEnd(44)}║
+║  Network:   Base Sepolia (eip155:84532)                  ║
+║  Payment:   USDC via x402 protocol                       ║
+╚══════════════════════════════════════════════════════════╝
+  `);
 
   // ── Step 2: Create x402 client ────────────────────
+  console.log("⏳ Step 1/3 — Initializing x402 payment client...");
   const client = new x402Client();
   registerExactEvmScheme(client, { signer });
-
-  // Wrap fetch with automatic payment handling
   const fetchWithPayment = wrapFetchWithPayment(fetch, client);
+  console.log("✅ Payment client ready.\n");
 
   // ── Step 3: Hit the gateway ───────────────────────
-  console.log(`\n📡 Requesting: GET ${GATEWAY_URL}/checkout`);
-  console.log("   (x402 will handle 402 → payment → retry automatically)\n");
+  console.log("⏳ Step 2/3 — Requesting access via GET /checkout...");
+  console.log("   → Server will challenge with HTTP 402 Payment Required");
+  console.log("   → x402 client will auto-sign USDC payment on Base Sepolia");
+  console.log("   → Facilitator settles payment on-chain\n");
 
   let shortCode: string;
 
@@ -67,13 +62,7 @@ async function main() {
       "x-agent-id": `demo-agent-${signer.address.slice(0, 8)}`,
     };
 
-    if (isHuman) {
-      console.log("ℹ️  Note: Routing to /checkout/human to demonstrate the 99% discount.");
-      console.log("   (Bypassing World App Simulator due to CLI production-mode restrictions)\\n");
-    }
-
-    const endpoint = isHuman ? "/checkout/human" : "/checkout";
-    const response = await fetchWithPayment(`${GATEWAY_URL}${endpoint}`, {
+    const response = await fetchWithPayment(`${GATEWAY_URL}/checkout`, {
       method: "GET",
       headers,
     });
@@ -81,16 +70,21 @@ async function main() {
     const body = await response.json();
 
     if (response.ok) {
-      console.log("✅ Checkout successful! Transaction settled.\n");
-      console.log("💳 Transaction:", JSON.stringify(body.transaction, null, 2));
+      console.log("✅ Payment settled on-chain! Transaction complete.\n");
+      console.log("📦 Transaction Receipt:");
+      console.log(`   Short Code:  ${body.transaction?.short_code}`);
+      console.log(`   Amount:      ${body.transaction?.amount} ${body.transaction?.currency}`);
+      console.log(`   Network:     ${body.transaction?.network}`);
+      console.log(`   Status:      ${body.status}`);
 
       shortCode = body.transaction?.short_code;
       if (!shortCode) {
         throw new Error("No short_code returned from checkout");
       }
 
-      // Show revoke URL if short_code exists
-      console.log(`\n🔗 Revoke URL: ${GATEWAY_URL}/revoke?code=${shortCode}\n`);
+      // Explorer link
+      console.log(`\n🔍 View on Explorer: https://sepolia.basescan.org/address/${signer.address}`);
+      console.log(`🔗 Revoke URL:       ${GATEWAY_URL}/revoke?code=${shortCode}`);
     } else {
       console.log(`❌ Request failed with status ${response.status}`);
       console.log("   Response:", JSON.stringify(body, null, 2));
@@ -102,8 +96,11 @@ async function main() {
   }
 
   // ── Step 4: Poll Premium Data ──────────────────────
-  console.log(`\n🔄 Polling GET ${GATEWAY_URL}/premium-data with Bearer ${shortCode}...`);
-  console.log(`   (Hit the Revoke URL above to instantly kill this agent!)`);
+  console.log(`\n⏳ Step 3/3 — Polling /premium-data every 3s with Bearer token...`);
+  console.log(`   ┌─────────────────────────────────────────────────────┐`);
+  console.log(`   │  💡 Open the Dashboard to revoke this agent live!  │`);
+  console.log(`   │     ${GATEWAY_URL.padEnd(47)}│`);
+  console.log(`   └─────────────────────────────────────────────────────┘\n`);
 
   setInterval(async () => {
     try {
@@ -115,15 +112,19 @@ async function main() {
       const data = await res.json();
       
       if (res.ok) {
-        process.stdout.write(`✅ [${new Date().toISOString()}] Data fetched! Metrics: ${data.data.metrics}\n`);
+        process.stdout.write(`  ✅ [${new Date().toLocaleTimeString()}] Data fetched — ${data.data.metrics}\n`);
       } else if (res.status === 403) {
-        console.error(`\n🚫 [403 FORBIDDEN] Access revoked by human owner!\n   Server message: ${data.error}\n`);
+        console.error(`\n  ╔══════════════════════════════════════════════════╗`);
+        console.error(`  ║  🚫  403 FORBIDDEN                               ║`);
+        console.error(`  ║  Access revoked by human owner!                  ║`);
+        console.error(`  ║  Server: ${(data.error || "").slice(0, 39).padEnd(39)}║`);
+        console.error(`  ╚══════════════════════════════════════════════════╝\n`);
         process.exit(1);
       } else {
-        console.error(`\n⚠️ Unexpected status: ${res.status}`, data);
+        console.error(`  ⚠️  Unexpected status: ${res.status}`, data);
       }
     } catch (e: any) {
-      console.error(`\n❌ Fetch error:`, e.message);
+      console.error(`  ❌ Fetch error:`, e.message);
     }
   }, 3000);
 }
