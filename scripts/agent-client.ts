@@ -1,205 +1,170 @@
 /**
- * 🤖 Glide — Demo Agent Client
+ * 🤖 Glide — 3-Tier Demo Script
  *
- * Simulates an AI agent purchasing premium data through the gateway.
- * Demonstrates the full x402 payment flow with live polling and revocation.
+ * Demonstrates the core value proposition:
+ *   "Same API. Same request. The only difference is whether it's backed by a real human."
+ *
+ * Step 1: Bot         → slow + expensive (no World ID)
+ * Step 2: Human       → fast + free (World ID verified)
+ * Step 3: Premium     → instant + premium (World ID + payment)
  *
  * Usage:
- *   EVM_PRIVATE_KEY=0x... npx tsx scripts/agent-client.ts
+ *   npx tsx scripts/agent-client.ts
  *
  * Prerequisites:
  *   - Server running at GATEWAY_URL (default: http://localhost:4021)
- *   - Wallet funded with testnet USDC on Base Sepolia
- *   - Get testnet USDC: https://faucet.circle.com  (select Base Sepolia)
  */
 
-import { x402Client, wrapFetchWithPayment, x402HTTPClient } from "@x402/fetch";
-import { registerExactEvmScheme } from "@x402/evm/exact/client";
-import { privateKeyToAccount } from "viem/accounts";
-import { createPublicClient, http, formatUnits } from "viem";
-import { baseSepolia } from "viem/chains";
-
-// ── Config ──────────────────────────────────────────
 const GATEWAY_URL = process.env.GATEWAY_URL || "http://localhost:4021";
-const PRIVATE_KEY = process.env.EVM_PRIVATE_KEY as `0x${string}`;
-const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as const;
 
-if (!PRIVATE_KEY) {
-  console.error("❌ Missing EVM_PRIVATE_KEY environment variable");
-  console.error("   Usage: EVM_PRIVATE_KEY=0x... npx tsx scripts/agent-client.ts");
-  process.exit(1);
-}
-
-// ── Helper: Check USDC balance ──────────────────────
-async function checkUSDCBalance(address: string): Promise<bigint> {
-  const client = createPublicClient({
-    chain: baseSepolia,
-    transport: http(),
-  });
-
-  const balance = await client.readContract({
-    address: USDC_ADDRESS,
-    abi: [
-      {
-        name: "balanceOf",
-        type: "function",
-        stateMutability: "view",
-        inputs: [{ name: "account", type: "address" }],
-        outputs: [{ name: "", type: "uint256" }],
-      },
-    ] as const,
-    functionName: "balanceOf",
-    args: [address as `0x${string}`],
-  });
-
-  return balance;
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 async function main() {
-  // ── Step 1: Create wallet signer ──────────────────
-  const signer = privateKeyToAccount(PRIVATE_KEY);
-
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
-║  🤖  GLIDE GATEWAY — Agent Client                       ║
+║  ✦  GLIDE — Human-Aware API Gateway Demo                ║
 ║──────────────────────────────────────────────────────────║
-║  Gateway:   ${GATEWAY_URL.padEnd(44)}║
-║  Wallet:    ${signer.address.padEnd(44)}║
-║  Network:   Base Sepolia (eip155:84532)                  ║
-║  Payment:   USDC via x402 protocol                       ║
+║  Endpoint:  ${(GATEWAY_URL + "/api/generate").padEnd(44)}║
+║  Demo:      3-Tier Access Gradient                       ║
+║                                                          ║
+║  "Same API. Same request.                                ║
+║   The only difference is proof of humanity."             ║
 ╚══════════════════════════════════════════════════════════╝
   `);
 
-  // ── Pre-flight: Check USDC balance ────────────────
-  console.log("⏳ Pre-flight — Checking USDC balance on Base Sepolia...");
-  try {
-    const balance = await checkUSDCBalance(signer.address);
-    const formatted = formatUnits(balance, 6);
-    console.log(`   💰 Balance: ${formatted} USDC`);
+  await sleep(1000);
 
-    if (balance === 0n) {
-      console.error(`
-  ╔══════════════════════════════════════════════════════════╗
-  ║  ❌  INSUFFICIENT FUNDS                                  ║
-  ║──────────────────────────────────────────────────────────║
-  ║  Your agent wallet has 0 USDC on Base Sepolia.           ║
-  ║                                                          ║
-  ║  To fund your wallet:                                    ║
-  ║  1. Go to https://faucet.circle.com                      ║
-  ║  2. Select "Base Sepolia" network                        ║
-  ║  3. Paste: ${signer.address.slice(0, 42).padEnd(42)}    ║
-  ║  4. Request testnet USDC                                 ║
-  ║                                                          ║
-  ║  You need at least $1.00 USDC to make a payment.         ║
-  ╚══════════════════════════════════════════════════════════╝
-      `);
-      process.exit(1);
-    }
+  // ─────────────────────────────────────────────
+  //  STEP 1: "The Bot" — No World ID
+  // ─────────────────────────────────────────────
+  console.log("━".repeat(60));
+  console.log("  🤖  STEP 1: The Bot");
+  console.log("  An agent hitting the API without proof of humanity.");
+  console.log("━".repeat(60));
+  console.log();
 
-    if (balance < 1_000_000n) {
-      console.warn(`   ⚠️  Balance below $1.00 — payment may fail!\n`);
-    } else {
-      console.log(`   ✅ Sufficient funds for payment.\n`);
-    }
-  } catch (e: any) {
-    console.warn(`   ⚠️  Could not check balance: ${e.message}\n`);
-  }
-
-  // ── Step 2: Create x402 client ────────────────────
-  console.log("⏳ Step 1/3 — Initializing x402 payment client...");
-  const client = new x402Client();
-  registerExactEvmScheme(client, { signer });
-  const fetchWithPayment = wrapFetchWithPayment(fetch, client);
-  console.log("✅ Payment client ready.\n");
-
-  // ── Step 3: Hit the gateway ───────────────────────
-  console.log("⏳ Step 2/3 — Requesting access via GET /checkout...");
-  console.log("   → Server will challenge with HTTP 402 Payment Required");
-  console.log("   → x402 client will auto-sign USDC payment on Base Sepolia");
-  console.log("   → Facilitator settles payment on-chain\n");
-
-  let shortCode: string;
+  const t1 = Date.now();
+  console.log("  ⏳ Calling GET /api/generate (no World ID)...");
 
   try {
-    const headers: Record<string, string> = {
-      "x-agent-id": `demo-agent-${signer.address.slice(0, 8)}`,
-    };
-
-    const response = await fetchWithPayment(`${GATEWAY_URL}/checkout`, {
-      method: "GET",
-      headers,
+    const res1 = await fetch(`${GATEWAY_URL}/api/generate`, {
+      headers: { "x-agent-id": "demo-bot-001" },
     });
+    const data1 = await res1.json();
+    const latency1 = Date.now() - t1;
 
-    const body = await response.json();
-
-    if (response.ok) {
-      console.log("✅ Payment settled on-chain! Transaction complete.\n");
-      console.log("📦 Transaction Receipt:");
-      console.log(`   Short Code:  ${body.transaction?.short_code}`);
-      console.log(`   Amount:      ${body.transaction?.amount} ${body.transaction?.currency}`);
-      console.log(`   Network:     ${body.transaction?.network}`);
-      console.log(`   Status:      ${body.status}`);
-
-      shortCode = body.transaction?.short_code;
-      if (!shortCode) {
-        throw new Error("No short_code returned from checkout");
-      }
-
-      // Explorer link
-      console.log(`\n🔍 View on Explorer: https://sepolia.basescan.org/address/${signer.address}`);
-      console.log(`🔗 Revoke URL:       ${GATEWAY_URL}/revoke?code=${shortCode}`);
-    } else if (response.status === 402) {
-      console.error(`❌ Payment failed! The x402 client could not settle the payment.`);
-      console.error(`   This usually means your wallet has insufficient USDC.`);
-      console.error(`   Fund your wallet at: https://faucet.circle.com (Base Sepolia)`);
-      console.error(`   Wallet: ${signer.address}`);
-      return;
-    } else {
-      console.log(`❌ Request failed with status ${response.status}`);
-      console.log("   Response:", JSON.stringify(body, null, 2));
-      return;
-    }
-  } catch (error: any) {
-    console.error("❌ Error during checkout:", error.message || error);
-    if (error.message?.includes("payment")) {
-      console.error("   → This likely means your wallet needs USDC on Base Sepolia.");
-      console.error("   → Get testnet USDC: https://faucet.circle.com");
-    }
-    return;
+    console.log(`  ⏱  Response time: ${latency1}ms`);
+    console.log(`  📊 Tier:     ${data1.tier}`);
+    console.log(`  📊 Priority: ${data1.priority}`);
+    console.log(`  📊 Verified: ${data1.verified}`);
+    console.log(`  📊 Quality:  ${data1.data?.quality}`);
+    console.log(`  💬 "${data1.message}"`);
+    console.log();
+    console.log(`  Result: SLOW (${latency1}ms) + LOW PRIORITY`);
+  } catch (e: any) {
+    console.error(`  ❌ Error: ${e.message}`);
   }
 
-  // ── Step 4: Poll Premium Data ──────────────────────
-  console.log(`\n⏳ Step 3/3 — Polling /premium-data every 3s with Bearer token...`);
-  console.log(`   ┌─────────────────────────────────────────────────────┐`);
-  console.log(`   │  💡 Open the Dashboard to revoke this agent live!  │`);
-  console.log(`   │     ${GATEWAY_URL.padEnd(47)}│`);
-  console.log(`   └─────────────────────────────────────────────────────┘\n`);
+  await sleep(2000);
+  console.log();
 
-  setInterval(async () => {
-    try {
-      const res = await fetch(`${GATEWAY_URL}/premium-data`, {
-        headers: {
-          Authorization: `Bearer ${shortCode}`
-        }
-      });
-      const data = await res.json();
-      
-      if (res.ok) {
-        process.stdout.write(`  ✅ [${new Date().toLocaleTimeString()}] Data fetched — ${data.data.metrics}\n`);
-      } else if (res.status === 403) {
-        console.error(`\n  ╔══════════════════════════════════════════════════╗`);
-        console.error(`  ║  🚫  403 FORBIDDEN                               ║`);
-        console.error(`  ║  Access revoked by human owner!                  ║`);
-        console.error(`  ║  Server: ${(data.error || "").slice(0, 39).padEnd(39)}║`);
-        console.error(`  ╚══════════════════════════════════════════════════╝\n`);
-        process.exit(1);
-      } else {
-        console.error(`  ⚠️  Unexpected status: ${res.status}`, data);
-      }
-    } catch (e: any) {
-      console.error(`  ❌ Fetch error:`, e.message);
-    }
-  }, 3000);
+  // ─────────────────────────────────────────────
+  //  STEP 2: "The Human" — World ID Verified
+  // ─────────────────────────────────────────────
+  console.log("━".repeat(60));
+  console.log("  🧬  STEP 2: The Human-Backed Agent");
+  console.log("  Same agent — but now backed by World ID.");
+  console.log("━".repeat(60));
+  console.log();
+
+  const t2 = Date.now();
+  console.log("  ⏳ Calling GET /api/generate (with X-World-ID-Proof)...");
+
+  try {
+    const res2 = await fetch(`${GATEWAY_URL}/api/generate`, {
+      headers: {
+        "x-agent-id": "demo-human-001",
+        "x-world-id-proof": "verified-human-zkproof-demo",
+      },
+    });
+    const data2 = await res2.json();
+    const latency2 = Date.now() - t2;
+
+    console.log(`  ⏱  Response time: ${latency2}ms`);
+    console.log(`  📊 Tier:       ${data2.tier}`);
+    console.log(`  📊 Priority:   ${data2.priority}`);
+    console.log(`  📊 Verified:   ${data2.verified}`);
+    console.log(`  📊 Quality:    ${data2.data?.quality}`);
+    console.log(`  📊 Resolution: ${data2.data?.resolution}`);
+    console.log(`  💬 "${data2.message}"`);
+    console.log();
+    console.log(`  Result: FAST (${latency2}ms) + FREE + HIGH PRIORITY`);
+  } catch (e: any) {
+    console.error(`  ❌ Error: ${e.message}`);
+  }
+
+  await sleep(2000);
+  console.log();
+
+  // ─────────────────────────────────────────────
+  //  STEP 3: "Premium" — World ID + Payment
+  // ─────────────────────────────────────────────
+  console.log("━".repeat(60));
+  console.log("  ⚡  STEP 3: Premium Tier");
+  console.log("  World ID + Payment = maximum priority.");
+  console.log("━".repeat(60));
+  console.log();
+
+  const t3 = Date.now();
+  console.log("  ⏳ Calling GET /api/generate (World ID + Payment)...");
+
+  try {
+    const res3 = await fetch(`${GATEWAY_URL}/api/generate`, {
+      headers: {
+        "x-agent-id": "demo-premium-001",
+        "x-world-id-proof": "verified-human-zkproof-demo",
+        "x-payment-verified": "true",
+      },
+    });
+    const data3 = await res3.json();
+    const latency3 = Date.now() - t3;
+
+    console.log(`  ⏱  Response time: ${latency3}ms`);
+    console.log(`  📊 Tier:       ${data3.tier}`);
+    console.log(`  📊 Priority:   ${data3.priority}`);
+    console.log(`  📊 Verified:   ${data3.verified}`);
+    console.log(`  📊 Quality:    ${data3.data?.quality}`);
+    console.log(`  📊 Resolution: ${data3.data?.resolution}`);
+    console.log(`  📊 Upscaled:   ${data3.data?.upscaled}`);
+    console.log(`  💬 "${data3.message}"`);
+    console.log();
+    console.log(`  Result: INSTANT (${latency3}ms) + PREMIUM QUALITY`);
+  } catch (e: any) {
+    console.error(`  ❌ Error: ${e.message}`);
+  }
+
+  // ─────────────────────────────────────────────
+  //  Summary
+  // ─────────────────────────────────────────────
+  console.log();
+  console.log("═".repeat(60));
+  console.log();
+  console.log("  Same API. Same request.");
+  console.log("  The only difference is whether it's backed by a real human.");
+  console.log();
+  console.log("  ┌──────────────┬──────────┬──────────┬──────────┐");
+  console.log("  │ Tier         │ Speed    │ Cost     │ Quality  │");
+  console.log("  ├──────────────┼──────────┼──────────┼──────────┤");
+  console.log("  │ 🤖 No ID     │ ~2000ms  │ $1.00    │ standard │");
+  console.log("  │ 🧬 World ID  │ <50ms    │ FREE     │ high     │");
+  console.log("  │ ⚡ ID + Pay  │ <10ms    │ $0.50    │ ultra    │");
+  console.log("  └──────────────┴──────────┴──────────┴──────────┘");
+  console.log();
+  console.log("  Powered by World ID × x402 × XMTP");
+  console.log("  https://github.com/0xshae/agentic-checkout");
+  console.log();
 }
 
 main().catch(console.error);
