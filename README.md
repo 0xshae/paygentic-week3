@@ -123,12 +123,12 @@ The `revoke_url` included in the XMTP message allows a human to instantly revoke
 
 Glide is designed to be developer-first. You can wrap any existing API endpoint in less than 5 minutes.
 
-1. **Install Glide Dependencies**:
-   `npm install @x402/core @xmtp/agent-sdk @worldcoin/agentkit`
+1. **Install Glide**:
+   `npm install @0xshae/glide-gateway`
 
 2. **Mount the Middleware**:
 ```typescript
-import { glideMiddleware } from "./middleware/glide";
+import { glideMiddleware } from "@0xshae/glide-gateway";
 
 app.get("/api/ai-generate", 
   glideMiddleware({ 
@@ -137,8 +137,8 @@ app.get("/api/ai-generate",
     botDelayMs: 2000 
   }), 
   (req, res) => {
-    // Your actual business logic - only verified users or bots who paid reach here
-    const { glideTier } = req;
+    // Your actual business logic reached after identity/payment verification
+    const { glideTier } = req as any;
     res.json({ message: `Access granted for ${glideTier}` });
   }
 );

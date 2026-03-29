@@ -1,5 +1,5 @@
 {
-  "name": "@glide-gateway/core",
+  "name": "@0xshae/glide-gateway",
   "version": "1.0.0",
   "description": "Middleware that verifies World ID and unlocks payments for human-backed agent requests.",
   "main": "dist/lib.js",
