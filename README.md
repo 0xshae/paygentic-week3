@@ -1,80 +1,69 @@
-# Glide — Infrastructure for the Agentic Web
+# Glide — Human-Aware API Gateway
 
-**The only drop-in payment gateway that lets merchants monetize AI traffic natively.** 
+**Middleware that verifies World ID and unlocks payments for human-backed agent requests.**
 
-The internet was built for human clicks. Glide is built for machine velocity. We enable merchants to protect their APIs and content behind an HTTP-native paywall that AI agents can actually pay, while giving verified humans a frictionless pass.
+The internet wasn't built for machines. APIs can't tell if a request comes from a real human or a bot. Glide sits in front of any API and enforces a 3-tier access model based on **proof of humanity** — powered by World ID, x402 payments, and XMTP audit receipts.
 
-![Glide](https://raw.githubusercontent.com/0xshae/glide/main/public/og-image.png) <!-- Update later to real OG image if needed -->
+## The 3-Tier Access Gradient
 
-## The Glide Pillars
+| Tier | World ID | Payment | Speed | Cost | Quality |
+|---|---|---|---|---|---|
+| 🤖 **Bot** | ✗ | Required | ~2000ms (throttled) | $1.00 | Standard |
+| 🧬 **Human** | ✓ | Free | <50ms | $0.00 | High |
+| ⚡ **Premium** | ✓ | Optional | <10ms | $0.50 | Ultra |
 
-### ⚡️ Absolute Velocity (x402)
-Sub-second settlement via HTTP headers (`@x402/express`). No redirects. No browser tabs. When an agent hits your protected endpoint, it is challenged with a `402 Payment Required`. It signs a real USDC transaction on Base Sepolia and gets immediate access. Pure, machine-to-machine commerce.
+> Same API. Same request. The only difference is whether it's backed by a real human.
 
-### 🧬 Identity Fluidity (World AgentKit)
-Seamlessly separate bots from humans via World ID (`@worldcoin/agentkit`). Charge a premium for algorithmic access ("The Bot Tax"), or let verified humans glide through. 
-* **Current Mode:** Free Trial (Verified humans get 3 free requests; bots pay $1.00 USDC per request).
+## How It Works
 
-### 🛡 Immutable Trust (XMTP)
-Total visibility without the friction. Every transaction generates a real-time XMTP cryptographic receipt sent to the human owner (`@xmtp/agent-sdk`). It includes a **one-click kill-switch**. If the agent goes rogue, the human revokes access instantly.
+```
+Agent hits API → Glide Middleware intercepts
+  ├── Has World ID proof?
+  │     ├── YES + Payment → ⚡ Premium (instant, highest quality)
+  │     └── YES            → 🧬 Human (fast, free, high quality)
+  └── NO                   → 🤖 Bot (throttled, expensive, standard)
+```
 
----
+## Quick Start
 
-## The Demo
-
-We built a live dashboard to visualize this machine-to-machine interaction.
-
-### 1. Launch the Gateway
 ```bash
-# Clone the repository
 git clone https://github.com/0xshae/agentic-checkout.git
-cd agentic-checkout
-
-# Install dependencies
-npm install
-
-# Configure environment (.env.example -> .env)
-# Add your receiving wallet and XMTP keys
-cp .env.example .env
-
-# Start the gateway
-npm run dev
+cd agentic-checkout && npm install
+cp .env.example .env   # Add your wallet + XMTP keys
+npm run dev             # Gateway at http://localhost:4021
 ```
-Open [http://localhost:4021](http://localhost:4021) to view the live Merchant Dashboard.
 
-### 2. Run the Agent
-In a separate terminal, launch our demo agent to simulate an AI trying to access your premium data:
+## Run the Demo
+
 ```bash
-EVM_PRIVATE_KEY=0x_YOUR_AGENT_WALLET npm run agent:demo
+# In a second terminal — runs all 3 tiers back-to-back
+npx tsx scripts/agent-client.ts
 ```
-**What happens:**
-1. The agent hits `GET /checkout`.
-2. Glide replies with `402 Payment Required` + x402 payment details.
-3. The agent auto-signs a $1.00 USDC transaction on Base Sepolia.
-4. The transaction appears **in real-time on your dashboard**.
-5. The agent begins continuously polling `/premium-data` every 3 seconds.
 
-### 3. The Kill Switch
-While the agent is polling, click the red **Kill Switch** button directly in the Glide Dashboard UI. 
-The agent's terminal will instantly crash with `🚫 403 FORBIDDEN — Access revoked by human owner!` and the dashboard row will flash revoked.
+The demo calls the same `/api/generate` endpoint three times:
+1. **No World ID** → throttled 2s, low-priority response
+2. **With World ID** → instant, free, high-quality
+3. **World ID + Payment** → instant, premium, ultra-quality
 
----
-
-## 🛠 Integration (2 Lines of Code)
-
-Ready to add Glide to your backend? It's just Express middleware.
+## Integration (2 Lines of Code)
 
 ```typescript
-import { glideGateway } from '@glide/core'; // pseudo-code for our implementation
+import { glideMiddleware } from "./middleware/glide";
 
-// Protect your existing API from unpaid bots
-app.use('/premium-data', glideGateway({ 
-  botPrice: '$1.00', 
-  humanDiscountUses: 3 
+app.use("/api/generate", glideMiddleware({
+  requireWorldId: true,
+  fallback: "rate-limit"   // or "pay" or "reject"
 }));
 ```
 
-See [INTEGRATION.md](./INTEGRATION.md) for the full 5-step integration guide on how to run this source code yourself.
+## Architecture
+
+| Layer | Tech | Purpose |
+|---|---|---|
+| Identity | `@worldcoin/agentkit` | World ID verification on World Chain |
+| Payments | `@x402/express` | HTTP-native USDC settlement on Base Sepolia |
+| Audit | `@xmtp/agent-sdk` | Encrypted receipts + one-click kill-switch |
+| Storage | `better-sqlite3` | Persistent usage tracking |
 
 ## License
 
