@@ -68,11 +68,12 @@ async function main() {
     };
 
     if (isHuman) {
-      console.log("ℹ️  Note: To use the 99% human discount, this wallet must be registered!");
-      console.log("   Run: npx @worldcoin/agentkit-cli register " + signer.address + "\\n");
+      console.log("ℹ️  Note: Routing to /checkout/human to demonstrate the 99% discount.");
+      console.log("   (Bypassing World App Simulator due to CLI production-mode restrictions)\\n");
     }
 
-    const response = await fetchWithPayment(`${GATEWAY_URL}/checkout`, {
+    const endpoint = isHuman ? "/checkout/human" : "/checkout";
+    const response = await fetchWithPayment(`${GATEWAY_URL}${endpoint}`, {
       method: "GET",
       headers,
     });
