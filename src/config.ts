@@ -17,7 +17,7 @@ export const config = {
 
   // ── Networks (CAIP-2) ─────────────────────────────
   baseSepolia: "eip155:84532" as const,
-  worldChain: "eip155:480" as const,
+  worldSepolia: "eip155:4801" as const,
 
   // ── x402 Facilitator ──────────────────────────────
   facilitatorUrl: process.env.FACILITATOR_URL || "https://x402.org/facilitator",

@@ -63,8 +63,13 @@ export async function sendAuditMessage(opts: {
     await agent.stop();
 
     console.info(`[XMTP] Audit sent to ${recipient} | code=${opts.shortCode}`);
-  } catch (err) {
-    console.error("[XMTP] Failed to send audit message:", err);
-    // Non-fatal — transaction is already recorded in SQLite
+  } catch (err: any) {
+    if (err?.message?.includes("0x")) {
+       console.error("\\n[XMTP] ❌ Fatal Error: Validation failed on your XMTP keys.");
+       console.error("  👉 Please ensure XMTP_WALLET_KEY is a valid private key (e.g. 0x...).");
+       console.error("  👉 Ensure XMTP_RECIPIENT_ADDRESS differs from your sender.");
+    } else {
+       console.error("\\n[XMTP] ❌ Delivery Error:", err.message || err);
+    }
   }
 }

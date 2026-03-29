@@ -86,6 +86,8 @@ const _insertTx = db.prepare(`
 
 const _getTx = db.prepare("SELECT * FROM transactions WHERE short_code = ?");
 
+const _getAllTxs = db.prepare("SELECT * FROM transactions ORDER BY created_at DESC");
+
 const _revokeTx = db.prepare(
   "UPDATE transactions SET status = 'REVOKED', revoked = 1 WHERE short_code = ? AND revoked = 0"
 );
@@ -125,6 +127,10 @@ export function getTransaction(shortCode: string): TransactionRecord | undefined
 export function revokeTransaction(shortCode: string): boolean {
   const result = _revokeTx.run(shortCode);
   return result.changes > 0;
+}
+
+export function getAllTransactions(): TransactionRecord[] {
+  return _getAllTxs.all() as TransactionRecord[];
 }
 
 export default db;

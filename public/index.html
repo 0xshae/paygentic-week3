@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Checkout Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* Premium Glassmorphism UI Style */
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at top left, #1a1a2e, #16213e, #0f3460);
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      width: 100%;
+      padding: 2rem 0;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 2.5rem;
+      background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    main {
+      width: 100%;
+      max-width: 1000px;
+      padding: 2rem;
+      box-sizing: border-box;
+    }
+    .panel {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+      margin-bottom: 2rem;
+    }
+    .panel h2 {
+      margin-top: 0;
+      font-size: 1.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 0.5rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    th {
+      color: #00d2ff;
+      font-weight: 600;
+    }
+    .badge {
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .badge.settled { background: rgba(0, 255, 0, 0.2); color: #00ff00; }
+    .badge.revoked { background: rgba(255, 0, 0, 0.2); color: #ff0000; }
+    
+    button {
+      background: linear-gradient(90deg, #ff416c 0%, #ff4b2b 100%);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    button:hover:not(:disabled) {
+      opacity: 0.9;
+      transform: scale(1.05);
+    }
+    button:disabled {
+      background: #555;
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .empty-state {
+      text-align: center;
+      color: #aaa;
+      padding: 2rem;
+      font-style: italic;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(0, 210, 255, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(0, 210, 255, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 210, 255, 0); }
+    }
+    .live-indicator {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      background: #00ff00;
+      border-radius: 50%;
+      margin-right: 0.5rem;
+      animation: pulse 2s infinite;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Agentic Checkout</h1>
+    <p>Headless Merchant Gateway for the AI Economy</p>
+  </header>
+  
+  <main>
+    <div class="panel">
+      <h2><span class="live-indicator"></span>Live Transaction Feed</h2>
+      <div style="overflow-x: auto;">
+        <table id="txTable">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Agent ID</th>
+              <th>Cost</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="txBody">
+            <tr id="emptyRow"><td colspan="5" class="empty-state">No transactions yet. Waiting for agents...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const txBody = document.getElementById('txBody');
+    const emptyRow = document.getElementById('emptyRow');
+    const txMap = new Map();
+
+    function formatTime(ms) {
+      if (!ms) return 'Unknown';
+      return new Date(ms).toLocaleTimeString();
+    }
+
+    function createRow(tx) {
+      const tr = document.createElement('tr');
+      tr.style.transition = "background-color 0.5s ease";
+      tr.style.backgroundColor = "rgba(0, 210, 255, 0.2)";
+      setTimeout(() => tr.style.backgroundColor = "transparent", 500);
+
+      const tdTime = document.createElement('td');
+      tdTime.textContent = formatTime(tx.created_at);
+      
+      const tdAgent = document.createElement('td');
+      tdAgent.textContent = tx.agent_id || 'Unknown';
+      
+      const tdCost = document.createElement('td');
+      tdCost.textContent = `${tx.amount} ${tx.currency}`;
+      
+      const tdStatus = document.createElement('td');
+      const badge = document.createElement('span');
+      badge.className = `badge ${tx.revoked ? 'revoked' : 'settled'}`;
+      badge.textContent = tx.revoked ? 'REVOKED' : 'ACTIVE';
+      tdStatus.appendChild(badge);
+      
+      const tdAction = document.createElement('td');
+      const btn = document.createElement('button');
+      btn.textContent = 'Kill Switch';
+      btn.disabled = tx.revoked;
+      btn.onclick = async () => {
+        btn.disabled = true;
+        btn.textContent = 'Revoking...';
+        try {
+          const res = await fetch(`/revoke?code=${tx.short_code}`);
+          if (!res.ok) throw new Error("Revoke failed");
+        } catch (e) {
+          alert("Error revoking: " + e.message);
+          btn.disabled = false;
+          btn.textContent = 'Kill Switch';
+        }
+      };
+      tdAction.appendChild(btn);
+      
+      tr.appendChild(tdTime);
+      tr.appendChild(tdAgent);
+      tr.appendChild(tdCost);
+      tr.appendChild(tdStatus);
+      tr.appendChild(tdAction);
+      
+      return tr;
+    }
+
+    function processTx(tx) {
+      if (emptyRow) emptyRow.style.display = 'none';
+      
+      if (txMap.has(tx.short_code)) {
+        const oldRow = txMap.get(tx.short_code);
+        const newRow = createRow(tx);
+        oldRow.replaceWith(newRow);
+        txMap.set(tx.short_code, newRow);
+      } else {
+        const row = createRow(tx);
+        txBody.prepend(row);
+        txMap.set(tx.short_code, row);
+      }
+    }
+
+    // Load initial Data
+    fetch('/api/transactions')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.length > 0) {
+          emptyRow.style.display = 'none';
+          // data is descending by created_at. We want to put them in the table in the same order
+          // so we append them (prepend would reverse the order).
+          data.forEach(tx => {
+            const row = createRow(tx);
+            txBody.appendChild(row);
+            txMap.set(tx.short_code, row);
+            row.style.backgroundColor = "transparent";
+          });
+        }
+      })
+      .catch(console.error);
+
+    // Watch for server events
+    const evtSource = new EventSource('/api/events');
+    evtSource.onmessage = (event) => {
+      const tx = JSON.parse(event.data);
+      processTx(tx);
+    };
+  </script>
+</body>
+</html>

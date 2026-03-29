@@ -16,11 +16,15 @@ import {
   getAgentkitExtension,
 } from "./agentkit";
 import { sendAuditMessage } from "./services/xmtp";
-import { getTransaction, revokeTransaction, insertTransaction } from "./db";
+import { getTransaction, revokeTransaction, insertTransaction, getAllTransactions } from "./db";
 import { nanoid } from "nanoid";
+import { EventEmitter } from "events";
+
+const eventBus = new EventEmitter();
 
 const app = express();
 app.use(express.json());
+app.use(express.static("public"));
 
 // ─────────────────────────────────────────────────────
 // x402 Resource Server + AgentKit Extension
@@ -32,6 +36,7 @@ const facilitatorClient = new HTTPFacilitatorClient({
 
 const resourceServer = new x402ResourceServer(facilitatorClient)
   .register(config.baseSepolia, new ExactEvmScheme())
+  .register(config.worldSepolia, new ExactEvmScheme())
   .registerExtension(agentkitResourceServerExtension);
 
 // ─────────────────────────────────────────────────────
@@ -45,6 +50,12 @@ const routes = {
         scheme: "exact" as const,
         price: config.botPrice,        // $1.00 — full Bot Tax
         network: config.baseSepolia,   // Base Sepolia (CAIP-2)
+        payTo: config.merchantWallet,
+      },
+      {
+        scheme: "exact" as const,
+        price: config.botPrice,
+        network: config.worldSepolia,  // World Sepolia (CAIP-2)
         payTo: config.merchantWallet,
       },
     ],
@@ -94,6 +105,9 @@ app.get("/checkout", (req: Request, res: Response) => {
     amount: config.botPrice,
     agentId: agentId || null,
   });
+  
+  const txRecord = getTransaction(short_code);
+  if (txRecord) eventBus.emit("transaction", txRecord);
 
   // Fire XMTP audit asynchronously (non-blocking)
   sendAuditMessage({
@@ -153,6 +167,30 @@ app.get("/premium-data", (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────
+// Dashboard APIs — Live Data
+// ─────────────────────────────────────────────────────
+
+app.get("/api/transactions", (req: Request, res: Response) => {
+  res.json(getAllTransactions());
+});
+
+app.get("/api/events", (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  const onTx = (data: any) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  eventBus.on("transaction", onTx);
+
+  req.on("close", () => {
+    eventBus.off("transaction", onTx);
+  });
+});
+
+// ─────────────────────────────────────────────────────
 // GET /revoke — Revoke a transaction by short_code
 // ─────────────────────────────────────────────────────
 
@@ -176,6 +214,9 @@ app.get("/revoke", (req: Request, res: Response) => {
 
   const success = revokeTransaction(code);
   if (success) {
+    const updatedTx = getTransaction(code);
+    if (updatedTx) eventBus.emit("transaction", updatedTx);
+
     res.json({
       status: "REVOKED",
       short_code: code,
@@ -199,6 +240,7 @@ app.listen(config.port, () => {
 ║  Port:       ${String(config.port).padEnd(35)}║
 ║  Wallet:     ${(config.merchantWallet.slice(0, 10) + "...").padEnd(35)}║
 ║  Network:    ${config.baseSepolia.padEnd(35)}║
+║              ${config.worldSepolia.padEnd(35)}║
 ║  Facilitator:${config.facilitatorUrl.slice(0, 35).padEnd(35)}║
 ║  Pricing:    $0.01 (human) / ${config.botPrice} (bot)${" ".repeat(12)}║
 ║  Stack:      x402 + AgentKit + XMTP             ║
