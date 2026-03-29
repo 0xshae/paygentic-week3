@@ -1,122 +1,80 @@
-# 🚪 Agentic Checkout
+# Glide — Infrastructure for the Agentic Web
 
-> **The Agentic Door** — a headless checkout gateway for the agentic economy.
+**The only drop-in payment gateway that lets merchants monetize AI traffic natively.** 
 
-Most checkouts are "human-only" (CAPTCHAs, 2FA, Stripe forms). This gateway lets AI agents prove they are human-backed and pay via HTTP-native protocols. **Shopify, but for the bots.**
+The internet was built for human clicks. Glide is built for machine velocity. We enable merchants to protect their APIs and content behind an HTTP-native paywall that AI agents can actually pay, while giving verified humans a frictionless pass.
 
-## Architecture
+![Glide](https://raw.githubusercontent.com/0xshae/glide/main/public/og-image.png) <!-- Update later to real OG image if needed -->
 
-```
-Agent ──▶ GET /checkout
-           │
-           ├─ 1. x402 Payment Gate (Coinbase)
-           │     └─ No payment → HTTP 402 + PAYMENT-REQUIRED header
-           │     └─ Returns USDC amount, network, payTo address
-           │
-           ├─ 2. AgentKit Sybil Shield (World ID)
-           │     └─ Agent registered in AgentBook? Verify ZK proof
-           │     └─ discount mode: 99% off for first verified human
-           │     └─ $0.01 (human) vs $1.00 (bot)
-           │
-           ├─ 3. Checkout Success (200 OK)
-           │     └─ Return product payload
-           │     └─ Fire XMTP audit message (async)
-           │     └─ Record transaction with short_code
-           │
-           └─ /revoke?code=<short_code>
-                 └─ Human revokes agent access via XMTP kill-switch
-```
+## The Glide Pillars
 
-## Stack
+### ⚡️ Absolute Velocity (x402)
+Sub-second settlement via HTTP headers (`@x402/express`). No redirects. No browser tabs. When an agent hits your protected endpoint, it is challenged with a `402 Payment Required`. It signs a real USDC transaction on Base Sepolia and gets immediate access. Pure, machine-to-machine commerce.
 
-| Layer      | Technology                                 |
-| ---------- | ------------------------------------------ |
-| Payments   | x402 (`@x402/express`) — USDC on Base      |
-| Identity   | World AgentKit (`@worldcoin/agentkit`)      |
-| Audit      | XMTP (`@xmtp/agent-sdk`) — receipts + revocation |
-| Storage    | SQLite (`better-sqlite3`) — persistent     |
-| Server     | Express.js + TypeScript                    |
+### 🧬 Identity Fluidity (World AgentKit)
+Seamlessly separate bots from humans via World ID (`@worldcoin/agentkit`). Charge a premium for algorithmic access ("The Bot Tax"), or let verified humans glide through. 
+* **Current Mode:** Free Trial (Verified humans get 3 free requests; bots pay $1.00 USDC per request).
 
-## Quick Start
+### 🛡 Immutable Trust (XMTP)
+Total visibility without the friction. Every transaction generates a real-time XMTP cryptographic receipt sent to the human owner (`@xmtp/agent-sdk`). It includes a **one-click kill-switch**. If the agent goes rogue, the human revokes access instantly.
 
+---
+
+## The Demo
+
+We built a live dashboard to visualize this machine-to-machine interaction.
+
+### 1. Launch the Gateway
 ```bash
-# 1. Clone & install
+# Clone the repository
 git clone https://github.com/0xshae/agentic-checkout.git
 cd agentic-checkout
+
+# Install dependencies
 npm install
 
-# 2. Configure environment
+# Configure environment (.env.example -> .env)
+# Add your receiving wallet and XMTP keys
 cp .env.example .env
-# Edit .env with your wallet and XMTP keys
 
-# 3. Run the gateway
+# Start the gateway
 npm run dev
 ```
+Open [http://localhost:4021](http://localhost:4021) to view the live Merchant Dashboard.
 
-## Environment Variables
+### 2. Run the Agent
+In a separate terminal, launch our demo agent to simulate an AI trying to access your premium data:
+```bash
+EVM_PRIVATE_KEY=0x_YOUR_AGENT_WALLET npm run agent:demo
+```
+**What happens:**
+1. The agent hits `GET /checkout`.
+2. Glide replies with `402 Payment Required` + x402 payment details.
+3. The agent auto-signs a $1.00 USDC transaction on Base Sepolia.
+4. The transaction appears **in real-time on your dashboard**.
+5. The agent begins continuously polling `/premium-data` every 3 seconds.
 
-| Variable                 | Description                                     |
-| ------------------------ | ----------------------------------------------- |
-| `MERCHANT_WALLET`        | Your wallet address for USDC payments            |
-| `PORT`                   | Server port (default: 4021)                      |
-| `FACILITATOR_URL`        | x402 facilitator (default: x402.org for testnet) |
-| `XMTP_ENV`               | XMTP network: `dev`, `production`, or `local`   |
-| `XMTP_WALLET_KEY`        | Private key for XMTP sender identity             |
-| `XMTP_DB_ENCRYPTION_KEY` | 64 hex chars for XMTP local DB encryption        |
-| `XMTP_RECIPIENT_ADDRESS` | Default recipient for audit messages             |
+### 3. The Kill Switch
+While the agent is polling, click the red **Kill Switch** button directly in the Glide Dashboard UI. 
+The agent's terminal will instantly crash with `🚫 403 FORBIDDEN — Access revoked by human owner!` and the dashboard row will flash revoked.
 
-## API Reference
+---
 
-### `GET /health`
-Health check. Returns `{ status: "ok", gateway: "Agentic Checkout" }`.
+## 🛠 Integration (2 Lines of Code)
 
-### `GET /checkout`
-**The Agentic Door.** Protected by x402 + AgentKit.
+Ready to add Glide to your backend? It's just Express middleware.
 
-Without payment → `402 Payment Required`:
-```json
-{
-  "x402Version": 1,
-  "accepts": [{
-    "scheme": "exact",
-    "price": "$1.00",
-    "network": "eip155:84532",
-    "payTo": "0x..."
-  }],
-  "extensions": {
-    "agentkit": {
-      "statement": "Verify your agent is backed by a real human to unlock a 99% discount",
-      "mode": { "type": "discount", "percent": 99, "uses": 1 }
-    }
-  }
-}
+```typescript
+import { glideGateway } from '@glide/core'; // pseudo-code for our implementation
+
+// Protect your existing API from unpaid bots
+app.use('/premium-data', glideGateway({ 
+  botPrice: '$1.00', 
+  humanDiscountUses: 3 
+}));
 ```
 
-With valid payment → `200 OK`:
-```json
-{
-  "status": "SETTLED",
-  "product": { "name": "Agentic Checkout — Premium Access" },
-  "transaction": { "short_code": "abc123xyz", "amount": "$1.00" }
-}
-```
-
-### `GET /revoke?code=<short_code>`
-Revoke agent access. Returns `{ status: "REVOKED" }`.
-
-## Identity-Aware Pricing
-
-| Scenario             | Price  | How                                    |
-| -------------------- | ------ | -------------------------------------- |
-| Verified Human (1st) | $0.01  | AgentKit discount (99% off, 1 use)     |
-| Returning Human      | $1.00  | Discount exhausted → full price        |
-| Unverified Bot       | $1.00  | No AgentKit proof → Bot Tax            |
-
-## The Stack ("Holy Trinity")
-
-- **x402** — HTTP-native payment. Agent gets 402, pays USDC, gets goods.
-- **AgentKit** — Agent proves it's backed by a real human via World ID ZK-proof.
-- **XMTP** — Every transaction sends a receipt to the human. Includes a kill-switch URL to revoke agent access.
+See [INTEGRATION.md](./INTEGRATION.md) for the full 5-step integration guide on how to run this source code yourself.
 
 ## License
 
