@@ -36,7 +36,7 @@ const facilitatorClient = new HTTPFacilitatorClient({
 
 const resourceServer = new x402ResourceServer(facilitatorClient)
   .register(config.baseSepolia, new ExactEvmScheme())
-  .register(config.worldSepolia, new ExactEvmScheme())
+  // Note: World Sepolia (eip155:4801) not yet supported by x402.org facilitator
   .registerExtension(agentkitResourceServerExtension);
 
 // ─────────────────────────────────────────────────────
@@ -50,12 +50,6 @@ const routes = {
         scheme: "exact" as const,
         price: config.botPrice,        // $1.00 — full Bot Tax
         network: config.baseSepolia,   // Base Sepolia (CAIP-2)
-        payTo: config.merchantWallet,
-      },
-      {
-        scheme: "exact" as const,
-        price: config.botPrice,
-        network: config.worldSepolia,  // World Sepolia (CAIP-2)
         payTo: config.merchantWallet,
       },
     ],
