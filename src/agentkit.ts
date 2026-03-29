@@ -13,15 +13,14 @@ export const agentBook = createAgentBookVerifier();
 // ── Persistent storage (SQLite) ─────────────────────
 export const agentKitStorage = new SqliteAgentKitStorage();
 
-// ── AgentKit hooks with discount mode ───────────────
-// 99% discount × 1 use = $1.00 → $0.01 for first verified human
+// ── AgentKit hooks with free-trial mode ─────────────
+// Verified humans get 3 free requests; bots pay $1.00 via x402
 export const agentkitHooks = createAgentkitHooks({
   agentBook,
   storage: agentKitStorage,
   mode: {
-    type: "discount",
-    percent: config.discountPercent,
-    uses: config.discountUses,
+    type: "free-trial",
+    uses: config.freeTrialUses,
   },
   onEvent: (event: AgentkitHookEvent) => {
     console.info(`[AgentKit] Event: ${event.type}`, JSON.stringify(event));
@@ -36,11 +35,10 @@ export const agentkitHooks = createAgentkitHooks({
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function getAgentkitExtension(): ReturnType<typeof declareAgentkitExtension> {
   return declareAgentkitExtension({
-    statement: "Verify your agent is backed by a real human to unlock a 99% discount",
+    statement: "Verify your agent is backed by a real human to unlock 3 free requests",
     mode: {
-      type: "discount",
-      percent: config.discountPercent,
-      uses: config.discountUses,
+      type: "free-trial",
+      uses: config.freeTrialUses,
     },
   });
 }

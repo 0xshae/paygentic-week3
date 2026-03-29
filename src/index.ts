@@ -58,18 +58,6 @@ const routes = {
     // AgentKit extension: verified humans get 99% discount ($0.01)
     extensions: getAgentkitExtension(),
   },
-  "GET /checkout/human": {
-    accepts: [
-      {
-        scheme: "exact" as const,
-        price: "$0.01",                // $0.01 — Mocked Discount
-        network: config.baseSepolia,
-        payTo: config.merchantWallet,
-      },
-    ],
-    description: "Agentic Checkout — Verified Human Route",
-    mimeType: "application/json",
-  },
 };
 
 // ─────────────────────────────────────────────────────
@@ -99,19 +87,16 @@ app.get("/health", (_req: Request, res: Response) => {
 // GET /checkout — Authorization (The Agentic Door)
 // ─────────────────────────────────────────────────────
 
-app.get(["/checkout", "/checkout/human"], (req: Request, res: Response) => {
+app.get("/checkout", (req: Request, res: Response) => {
   // If we reach here, x402 payment was verified
   const agentId = req.headers["x-agent-id"] as string | undefined;
-  
-  // Base price is botPrice, unless the agent accessed the human mock route
-  const actualPrice = req.path === "/checkout/human" ? "$0.01" : config.botPrice;
 
   // Generate short code and persist transaction immediately
   const short_code = nanoid(10);
   insertTransaction({
     shortCode: short_code,
     humanId: null,
-    amount: actualPrice,
+    amount: config.botPrice,
     agentId: agentId || null,
   });
   
@@ -121,7 +106,7 @@ app.get(["/checkout", "/checkout/human"], (req: Request, res: Response) => {
   // Fire XMTP audit asynchronously (non-blocking)
   sendAuditMessage({
     shortCode: short_code,
-    amount: actualPrice,
+    amount: config.botPrice,
     agentId: agentId || null,
     humanId: null,
   }).catch(console.error);
@@ -129,7 +114,7 @@ app.get(["/checkout", "/checkout/human"], (req: Request, res: Response) => {
   res.status(200).json({
     status: "SETTLED",
     transaction: {
-      amount: actualPrice,
+      amount: config.botPrice,
       currency: config.asset,
       network: config.baseSepolia,
       short_code: short_code,
@@ -251,7 +236,7 @@ app.listen(config.port, () => {
 ║  Network:    ${config.baseSepolia.padEnd(35)}║
 ║              ${config.worldSepolia.padEnd(35)}║
 ║  Facilitator:${config.facilitatorUrl.slice(0, 35).padEnd(35)}║
-║  Pricing:    $0.01 (human) / ${config.botPrice} (bot)${" ".repeat(12)}║
+║  Pricing:    3 free (human) / ${config.botPrice} (bot)${" ".repeat(11)}║
 ║  Stack:      x402 + AgentKit + XMTP             ║
 ╚══════════════════════════════════════════════════╝
   `);

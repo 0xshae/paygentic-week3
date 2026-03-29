@@ -10,9 +10,8 @@ export const config = {
   // ── Pricing (Identity-Aware) ──────────────────────
   // Full price for unverified agents ("Bot Tax")
   botPrice: "$1.00",
-  // AgentKit `discount` mode gives verified humans 99% off → $0.01
-  discountPercent: 99,
-  discountUses: 1,
+  // AgentKit `free-trial` mode gives verified humans 3 free requests
+  freeTrialUses: 3,
   asset: "USDC",
 
   // ── Networks (CAIP-2) ─────────────────────────────
