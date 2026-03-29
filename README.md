@@ -29,6 +29,7 @@ In the agentic economy, APIs are flooded by autonomous agents. Traditional "Pay-
 1. **Granting free, high-speed access** to verified humans (World ID).
 2. **Enforcing on-chain settlement** for unverified bot traffic (x402).
 3. **Offering "Instant Premium" access** for humans who also pay for extra features.
+4. **Enabling "Strict Mode"**: Merchants can choose to completely block all bot traffic, ensuring their APIs are strictly human-only.
 
 ---
 
@@ -40,6 +41,9 @@ Glide enforces a 3-Tier Access Model directly at the middleware layer:
 | **BOT** | No World ID | Low | **$1.00 USDC** | 2000ms Throttle |
 | **HUMAN** | World ID (Proof of Personhood) | High | **$0.00** | <50ms Latency |
 | **PREMIUM**| World ID + x402 Payment | Instant | **$0.50 USDC**| <10ms + Ultra Quality |
+
+> [!TIP]
+> **Human-Only Integration**: For sensitive endpoints, Glide allows you to skip the payment tier entirely and reject any request that doesn't carry a valid Proof of Personhood.
 
 ---
 
@@ -92,7 +96,8 @@ function resolveTier(req: Request): GlideTier {
 
 ### Policy Enforcement
 Once the tier is resolved, Glide applies the policy (throtlling, payment gating, or instant passthrough):
-- **Bot Tier**: If no payment is detected, it triggers a 402 Payment Required response via the `@x402/express` server. In demo mode, it applies a `botDelayMs` (default 2s) to simulate resource throttling.
+- **Bot Tier**: If no payment is detected, it triggers a 402 Payment Required response via the `@x402/express` server. In demo mode, it applies a `botDelayMs` (default 2s) to simulate resource throttling. 
+  - *Strict Mode*: Developers can configure the middleware to return a `403 Forbidden` if no World ID is present, effectively purging all non-human traffic.
 - **Human Tier**: Bypasses payment requirements entirely if a valid World ID proof is detected.
 
 ---
