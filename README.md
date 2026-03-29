@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Stack: World ID + x402 + XMTP](https://img.shields.io/badge/Stack-World%20ID%20+%20x402%20+%20XMTP-blueviolet)](https://world.org/)
+[![NPM Version](https://img.shields.io/npm/v/@0xshae/glide-gateway.svg)](https://www.npmjs.com/package/@0xshae/glide-gateway)
 
 **Middleware that verifies World ID and unlocks payments for human-backed agent requests.**
 
