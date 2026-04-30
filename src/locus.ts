@@ -1,5 +1,5 @@
 /**
- * Locus Checkout Integration — RepGate
+ * Locus Checkout Integration — AgentCred
  *
  * Handles creating Locus Checkout sessions for agent staking
  * and processing webhook callbacks when payments are confirmed.
@@ -42,14 +42,14 @@ export async function createStakeSession(
         },
         body: JSON.stringify({
           amount: amount.toFixed(2),
-          description: `RepGate stake deposit — agent ${wallet.slice(0, 10)}...`,
+          description: `AgentCred stake deposit — agent ${wallet.slice(0, 10)}...`,
           webhookUrl: `${config.publicUrl}/webhook/locus`,
           successUrl: `${config.publicUrl}/?stake=success&wallet=${wallet}`,
           cancelUrl: `${config.publicUrl}/?stake=cancelled`,
           metadata: {
             wallet,
             purpose: "stake",
-            gateway: "repgate",
+            gateway: "agentcred",
           },
         }),
       });

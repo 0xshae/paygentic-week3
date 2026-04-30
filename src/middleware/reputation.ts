@@ -1,5 +1,5 @@
 /**
- * Reputation Middleware — RepGate
+ * Reputation Middleware — AgentCred
  *
  * Intercepts requests to protected endpoints and enforces
  * access based on the agent's reputation score and balance.
@@ -51,7 +51,7 @@ export function reputationMiddleware() {
     const tier = getTier(score);
     const cost = tier.costPerCall;
 
-    const logPrefix = `[RepGate] ${wallet.slice(0, 10)}...`;
+    const logPrefix = `[AgentCred] ${wallet.slice(0, 10)}...`;
     console.log(`${logPrefix} Score: ${score} | Tier: ${tier.name} | Cost: $${cost} | Balance: $${agent.stake_balance.toFixed(4)}`);
 
     // 4. Check staking requirements (only for first-time staking)

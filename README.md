@@ -1,4 +1,4 @@
-# RepGate — Reputation-Gated API Gateway
+# AgentCred — Reputation-Gated API Gateway
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Stack: Locus Checkout + USDC](https://img.shields.io/badge/Stack-Locus%20Checkout%20+%20USDC-blueviolet)](https://paywithlocus.com)
@@ -15,7 +15,7 @@ APIs can't tell good agents from bad ones. New agents pay the same as veterans, 
 
 ## The Solution
 
-**RepGate** sits in front of any API and enforces a 3-tier pricing model based on **onchain reputation**:
+**AgentCred** sits in front of any API and enforces a 3-tier pricing model based on **onchain reputation**:
 
 | Tier | Score | Cost/Call | Requirements |
 |:-----|:------|:----------|:-------------|
@@ -33,7 +33,7 @@ APIs can't tell good agents from bad ones. New agents pay the same as veterans, 
 ## How It Works
 
 ```
-Agent → x-agent-wallet header → RepGate Middleware
+Agent → x-agent-wallet header → AgentCred Middleware
                                     ↓
                         [Check reputation & balance]
                             ↓              ↓
@@ -48,7 +48,7 @@ Agent → x-agent-wallet header → RepGate Middleware
 ```
 
 1. Agent sends request with `x-agent-wallet` header
-2. RepGate computes reputation score → determines tier → calculates cost
+2. AgentCred computes reputation score → determines tier → calculates cost
 3. If insufficient balance: returns a Locus Checkout URL for staking
 4. If balance OK: deducts cost, forwards request to target API
 5. On response: updates reputation (+0.5 for success, -2 for failure)
@@ -144,7 +144,7 @@ curl -X POST http://localhost:4021/v1/generate \
 ```json
 {
   "data": { /* response from target API */ },
-  "repgate": {
+  "agentcred": {
     "wallet": "0xYourAgentWallet",
     "reputation": 14,
     "tier": "Bronze",
@@ -231,12 +231,12 @@ paygentic-week3/
 
 ## Locus Integration
 
-RepGate uses [Locus Checkout](https://docs.paywithlocus.com/checkout/index) for agent staking:
+AgentCred uses [Locus Checkout](https://docs.paywithlocus.com/checkout/index) for agent staking:
 
-1. **Session Creation**: When an agent needs to stake, RepGate creates a Locus Checkout session via the SDK
+1. **Session Creation**: When an agent needs to stake, AgentCred creates a Locus Checkout session via the SDK
 2. **Payment**: Agent (or human) pays at the checkout URL using Locus Wallet, external wallet, or agent API
 3. **Webhook**: Locus sends `checkout.session.paid` to `/webhook/locus`
-4. **Balance Update**: RepGate adds the USDC to the agent's stake balance
+4. **Balance Update**: AgentCred adds the USDC to the agent's stake balance
 
 For local development, use the simulate endpoint:
 ```bash

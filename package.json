@@ -1,5 +1,5 @@
 {
-  "name": "repgate",
+  "name": "agentcred",
   "version": "1.0.0",
   "description": "Reputation-gated API gateway for the agent economy. Agents stake USDC via Locus Checkout and earn lower rates through successful API usage.",
   "main": "dist/index.js",

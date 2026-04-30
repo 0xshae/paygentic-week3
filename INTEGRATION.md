@@ -1,4 +1,4 @@
-# RepGate — Integration Guide
+# AgentCred — Integration Guide
 
 ## 1. Prerequisites
 - **Node.js** v18+
@@ -21,14 +21,14 @@ TARGET_API_URL=https://your-actual-api.com/endpoint
 
 ## 3. Protect Your API
 
-RepGate acts as a reverse proxy. Set `TARGET_API_URL` to your real API endpoint. All requests to `/v1/generate` will be forwarded after reputation and balance checks pass.
+AgentCred acts as a reverse proxy. Set `TARGET_API_URL` to your real API endpoint. All requests to `/v1/generate` will be forwarded after reputation and balance checks pass.
 
 ## 4. Agent Integration
 
 Agents send requests with the `x-agent-wallet` header:
 
 ```bash
-curl -X POST https://your-repgate-instance.com/v1/generate \
+curl -X POST https://your-agentcred-instance.com/v1/generate \
   -H "Content-Type: application/json" \
   -H "x-agent-wallet: 0xAgentWalletAddress" \
   -d '{"prompt": "Generate something"}'

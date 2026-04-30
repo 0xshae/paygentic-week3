@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════
-#  RepGate Demo — Agent B (Pre-Funded, High Reputation)
+#  AgentCred Demo — Agent B (Pre-Funded, High Reputation)
 #
 #  This script demonstrates a trusted agent:
 #  1. Seed Agent B (5 USDC staked, 20 prior successes)
@@ -51,7 +51,7 @@ for i in $(seq 1 20); do
   HTTP_CODE=$(echo "$RESPONSE" | tail -1)
   BODY=$(echo "$RESPONSE" | sed '$d')
 
-  REP=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Rep: {d[\"repgate\"][\"reputation\"]} | Tier: {d[\"repgate\"][\"tier\"]} | Cost: \${d[\"repgate\"][\"cost_deducted\"]} | Balance: \${d[\"repgate\"][\"balance_remaining\"]}')" 2>/dev/null)
+  REP=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Rep: {d[\"agentcred\"][\"reputation\"]} | Tier: {d[\"agentcred\"][\"tier\"]} | Cost: \${d[\"agentcred\"][\"cost_deducted\"]} | Balance: \${d[\"agentcred\"][\"balance_remaining\"]}')" 2>/dev/null)
 
   if [ -n "$REP" ]; then
     echo "  Call #${i}: ${REP}"

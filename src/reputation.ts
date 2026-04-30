@@ -1,5 +1,5 @@
 /**
- * Reputation Module — RepGate
+ * Reputation Module — AgentCred
  *
  * Computes an agent's reputation score (0–100) based on:
  *   - Stake: each 0.1 USDC staked → +1 point (max 50)

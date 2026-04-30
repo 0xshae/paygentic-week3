@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════
-#  RepGate Demo — Seed Agent B (Pre-Funded)
+#  AgentCred Demo — Seed Agent B (Pre-Funded)
 #
 #  Creates a pre-staked agent with 5 USDC and 20 
 #  successful prior calls. This sets reputation to ~60

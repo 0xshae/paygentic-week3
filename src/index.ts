@@ -33,7 +33,7 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({
     status: "ok",
     version: "1.0.0",
-    gateway: "RepGate — Reputation-Gated API Gateway",
+    gateway: "AgentCred — Reputation-Gated API Gateway",
     timestamp: Date.now(),
   });
 });
@@ -119,15 +119,15 @@ app.post(
     );
 
     // Return response with reputation metadata in headers
-    res.set("X-RepGate-Score", String(scoreAfter));
-    res.set("X-RepGate-Tier", tierAfter.name);
-    res.set("X-RepGate-Cost", String(repData.costPerCall));
-    res.set("X-RepGate-Balance", String(repData.balanceAfter));
+    res.set("X-AgentCred-Score", String(scoreAfter));
+    res.set("X-AgentCred-Tier", tierAfter.name);
+    res.set("X-AgentCred-Cost", String(repData.costPerCall));
+    res.set("X-AgentCred-Balance", String(repData.balanceAfter));
 
     res.status(statusCode >= 400 ? statusCode : 200).json({
       // Wrap the actual API response with reputation metadata
       data: apiResponse,
-      repgate: {
+      agentcred: {
         wallet: repData.wallet,
         reputation: scoreAfter,
         tier: tierAfter.name,
@@ -203,14 +203,14 @@ app.get(
       `[Proxy] ← ${statusCode} | Rep: ${scoreBefore} → ${scoreAfter} | Tier: ${tierAfter.name} | Cost: $${repData.costPerCall}`
     );
 
-    res.set("X-RepGate-Score", String(scoreAfter));
-    res.set("X-RepGate-Tier", tierAfter.name);
-    res.set("X-RepGate-Cost", String(repData.costPerCall));
-    res.set("X-RepGate-Balance", String(repData.balanceAfter));
+    res.set("X-AgentCred-Score", String(scoreAfter));
+    res.set("X-AgentCred-Tier", tierAfter.name);
+    res.set("X-AgentCred-Cost", String(repData.costPerCall));
+    res.set("X-AgentCred-Balance", String(repData.balanceAfter));
 
     res.status(200).json({
       data: apiResponse,
-      repgate: {
+      agentcred: {
         wallet: repData.wallet,
         reputation: scoreAfter,
         tier: tierAfter.name,
@@ -348,7 +348,7 @@ app.get("/api/events", (req: Request, res: Response) => {
 app.listen(config.port, () => {
   console.log(`
 ╔══════════════════════════════════════════════════════╗
-║    ⚡ REPGATE v1.0                                   ║
+║    ⚡ AGENTCRED v1.0                                   ║
 ║    Reputation-Gated API Gateway                      ║
 ║──────────────────────────────────────────────────────║
 ║  Port:       ${String(config.port).padEnd(39)}║
