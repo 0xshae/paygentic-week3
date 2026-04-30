@@ -1,31 +1,45 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+// ── Tier Definitions ────────────────────────────────
+export interface TierConfig {
+  name: string;
+  minScore: number;
+  maxScore: number;
+  costPerCall: number;
+  minStake: number;
+}
+
+export const TIERS: TierConfig[] = [
+  { name: "Bronze",   minScore: 0,  maxScore: 20,  costPerCall: 0.01,  minStake: 1 },
+  { name: "Silver",   minScore: 21, maxScore: 50,  costPerCall: 0.005, minStake: 0 },
+  { name: "Gold",     minScore: 51, maxScore: 100, costPerCall: 0.001, minStake: 0 },
+];
+
+// ── Configuration ───────────────────────────────────
 export const config = {
   port: parseInt(process.env.PORT || "4021", 10),
 
-  // ── Merchant ──────────────────────────────────────
-  merchantWallet: (process.env.MERCHANT_WALLET || "0x0000000000000000000000000000000000000000") as `0x${string}`,
+  // Locus Checkout
+  locusApiKey: process.env.LOCUS_API_KEY || "",
+  locusWebhookSecret: process.env.LOCUS_WEBHOOK_SECRET || "",
+  locusApiBase: "https://beta-api.paywithlocus.com/api",
+  checkoutBaseUrl: "https://checkout.paywithlocus.com",
 
-  // ── Pricing (Identity-Aware) ──────────────────────
-  // Full price for unverified agents ("Bot Tax")
-  botPrice: "$1.00",
-  // Premium price for World ID + Payment tier
-  premiumPrice: "$0.50",
-  // AgentKit `free-trial` mode gives verified humans 3 free requests
-  freeTrialUses: 3,
-  asset: "USDC",
+  // Target API (the real API being proxied)
+  targetApiUrl: process.env.TARGET_API_URL || "https://httpbin.org/post",
 
-  // ── Networks (CAIP-2) ─────────────────────────────
-  baseSepolia: "eip155:84532" as const,
-  worldSepolia: "eip155:4801" as const,
+  // Public URL for webhook callbacks
+  publicUrl: process.env.PUBLIC_URL || "http://localhost:4021",
 
-  // ── x402 Facilitator ──────────────────────────────
-  facilitatorUrl: process.env.FACILITATOR_URL || "https://x402.org/facilitator",
-
-  // ── XMTP ──────────────────────────────────────────
-  xmtpEnv: process.env.XMTP_ENV || "dev",
-  xmtpWalletKey: process.env.XMTP_WALLET_KEY || "",
-  xmtpDbEncryptionKey: process.env.XMTP_DB_ENCRYPTION_KEY || "",
-  xmtpRecipientAddress: process.env.XMTP_RECIPIENT_ADDRESS || "",
+  // Reputation scoring constants
+  reputation: {
+    stakePointsPer01: 1,       // +1 point per 0.1 USDC staked
+    maxStakePoints: 50,
+    successPoints: 0.5,        // +0.5 per successful call
+    maxSuccessPoints: 50,
+    failurePenalty: 2,          // -2 per failed call
+    minScore: 0,
+    maxScore: 100,
+  },
 } as const;
