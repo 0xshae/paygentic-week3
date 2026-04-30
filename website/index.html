@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentCred — Reputation-Gated API Access</title>
+  <meta name="description" content="API access governed by onchain reputation. Agents stake USDC, build credibility, and unlock lower rates through consistent performance." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Ambient Glows -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <!-- ─── Nav ─────────────────────────────────── -->
+  <nav>
+    <div class="inner">
+      <a href="#" class="nav-brand">
+        <div class="nav-logo">AC</div>
+        <span class="nav-name">AgentCred</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#how">How It Works</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#integrate">Integrate</a></li>
+        <li><a href="https://github.com/0xshae/paygentic-week3" target="_blank" class="nav-cta">GitHub →</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ─── Hero ────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero-badge">Built on Locus Checkout · Base Network</div>
+    <h1>
+      Reputation<br /><span class="thin">as a Service.</span>
+    </h1>
+    <p class="hero-sub">
+      API access governed by onchain credibility. Agents stake USDC, build trust through usage, and unlock progressively lower rates.
+    </p>
+    <div class="hero-actions">
+      <a href="https://github.com/0xshae/paygentic-week3" target="_blank" class="btn-primary">
+        Get Started
+      </a>
+      <a href="#how" class="btn-ghost">Learn More</a>
+    </div>
+  </section>
+
+  <!-- ─── How It Works ────────────────────────── -->
+  <section id="how">
+    <div class="container">
+      <div class="reveal">
+        <div class="section-label">How It Works</div>
+        <h2 class="section-title">Three steps to trusted access.</h2>
+        <p class="section-desc">
+          No API keys. No whitelists. Just stake, call, and earn your way to lower costs.
+        </p>
+      </div>
+
+      <div class="steps-grid">
+        <div class="glass-card step-card reveal">
+          <div class="step-num">01</div>
+          <div class="step-icon">◆</div>
+          <div class="step-title">Stake USDC</div>
+          <p class="step-desc">
+            New agents stake via Locus Checkout. Each 0.1 USDC staked adds +1 to your reputation score. Minimum $1 to begin.
+          </p>
+        </div>
+
+        <div class="glass-card step-card reveal">
+          <div class="step-num">02</div>
+          <div class="step-icon">◈</div>
+          <div class="step-title">Make API Calls</div>
+          <p class="step-desc">
+            Every successful call earns +0.5 reputation. Failed calls cost -2 points. Your track record becomes your identity.
+          </p>
+        </div>
+
+        <div class="glass-card step-card reveal">
+          <div class="step-num">03</div>
+          <div class="step-icon">◇</div>
+          <div class="step-title">Unlock Lower Rates</div>
+          <p class="step-desc">
+            Higher reputation means cheaper access. Gold agents pay 10x less per call than newcomers. Trust is rewarded.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Pricing Tiers ───────────────────────── -->
+  <section id="pricing">
+    <div class="container">
+      <div class="reveal">
+        <div class="section-label">Pricing</div>
+        <h2 class="section-title">Cost scales with credibility.</h2>
+        <p class="section-desc">
+          The more you prove yourself, the less you pay. It's that simple.
+        </p>
+      </div>
+
+      <div class="tiers-grid">
+        <div class="glass-card tier-card reveal">
+          <div class="tier-name">Bronze</div>
+          <div class="tier-price">$0.01 <span class="unit">/ call</span></div>
+          <div class="tier-range">Score 0 – 20</div>
+          <ul class="tier-features">
+            <li>Requires $1 USDC initial stake</li>
+            <li>Standard rate limiting</li>
+            <li>Full API access</li>
+            <li>Reputation tracking</li>
+          </ul>
+        </div>
+
+        <div class="glass-card tier-card featured reveal">
+          <div class="tier-name">Silver</div>
+          <div class="tier-price">$0.005 <span class="unit">/ call</span></div>
+          <div class="tier-range">Score 21 – 50</div>
+          <ul class="tier-features">
+            <li>50% cost reduction</li>
+            <li>No re-staking required</li>
+            <li>Priority access</li>
+            <li>Extended call history</li>
+          </ul>
+        </div>
+
+        <div class="glass-card tier-card reveal">
+          <div class="tier-name">Gold</div>
+          <div class="tier-price">$0.001 <span class="unit">/ call</span></div>
+          <div class="tier-range">Score 51 – 100</div>
+          <ul class="tier-features">
+            <li>90% cost reduction</li>
+            <li>Highest trust level</li>
+            <li>Lowest latency</li>
+            <li>Full audit trail</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Integration ─────────────────────────── -->
+  <section id="integrate">
+    <div class="container">
+      <div class="code-section reveal">
+        <div>
+          <div class="section-label">Integration</div>
+          <h2 class="section-title">One header.<br />That's it.</h2>
+          <p class="section-desc">
+            Add <code style="color:var(--text-primary);font-family:'SF Mono',monospace;font-size:0.85rem;">x-agent-wallet</code> to your request. AgentCred handles reputation, billing, and access control automatically.
+          </p>
+          <div style="margin-top:2rem;">
+            <a href="https://github.com/0xshae/paygentic-week3" target="_blank" class="btn-primary">View on GitHub</a>
+          </div>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-dot"></span>
+            <span class="code-dot"></span>
+            <span class="code-dot"></span>
+            <span class="code-filename">request.sh</span>
+          </div>
+          <div class="code-body">
+<pre><span class="comment"># Your agent makes a call</span>
+<span class="func">curl</span> <span class="keyword">-X POST</span> https://api.agentcred.xyz/v1/generate \
+  <span class="keyword">-H</span> <span class="string">"x-agent-wallet: 0xYourWallet"</span> \
+  <span class="keyword">-H</span> <span class="string">"Content-Type: application/json"</span> \
+  <span class="keyword">-d</span> <span class="string">'{"prompt": "hello"}'</span>
+
+<span class="comment"># Response includes reputation metadata</span>
+{
+  <span class="string">"data"</span>: { ... },
+  <span class="string">"repgate"</span>: {
+    <span class="string">"reputation"</span>: <span class="func">42</span>,
+    <span class="string">"tier"</span>: <span class="string">"Silver"</span>,
+    <span class="string">"cost_deducted"</span>: <span class="func">0.005</span>,
+    <span class="string">"balance_remaining"</span>: <span class="func">3.45</span>
+  }
+}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Metrics ─────────────────────────────── -->
+  <div class="container">
+    <div class="metrics-bar reveal">
+      <div class="glass-card metric-card">
+        <div class="metric-value">0–100</div>
+        <div class="metric-label">Reputation Range</div>
+      </div>
+      <div class="glass-card metric-card">
+        <div class="metric-value">3</div>
+        <div class="metric-label">Access Tiers</div>
+      </div>
+      <div class="glass-card metric-card">
+        <div class="metric-value">10×</div>
+        <div class="metric-label">Cost Reduction</div>
+      </div>
+      <div class="glass-card metric-card">
+        <div class="metric-value">USDC</div>
+        <div class="metric-label">Native Currency</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Footer ──────────────────────────────── -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <div class="nav-logo" style="width:28px;height:28px;font-size:0.65rem;">AC</div>
+          <span class="footer-brand-name">AgentCred</span>
+        </div>
+        <ul class="footer-links">
+          <li><a href="https://github.com/0xshae/paygentic-week3" target="_blank">GitHub</a></li>
+          <li><a href="https://paywithlocus.com" target="_blank">Powered by Locus</a></li>
+          <li><a href="#how">How It Works</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+        </ul>
+        <span class="footer-copy">© 2026 AgentCred</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
