@@ -1,59 +1,67 @@
-# Agentic Checkout — Merchant Integration Guide
-
-Welcome to the open-source **Agentic Gateway**. This guide helps you easily deploy the gateway and start monetizing API access from AI agents using x402, AgentKit, and XMTP.
+# RepGate — Integration Guide
 
 ## 1. Prerequisites
 - **Node.js** v18+
-- An EVM-compatible wallet address to receive funds.
-- A secondary "sitter" wallet for the server to dispatch XMTP messages.
+- A Locus API key (get one at [beta.paywithlocus.com](https://beta.paywithlocus.com) with code `PAYGENTIC`)
 
-## 2. Setup your Environment
+## 2. Setup
 
-Clone the repository and install dependencies:
 ```bash
-git clone https://github.com/0xshae/agentic-checkout.git
-cd agentic-checkout
+git clone https://github.com/0xshae/paygentic-week3.git
+cd paygentic-week3
 npm install
-```
-
-Copy the example environment template:
-```bash
 cp .env.example .env
 ```
 
-Set your configuration:
+Set your Locus API key in `.env`:
 ```env
-# Your receiving wallet (on Base)
-MERCHANT_WALLET=0xYourReceivingAddress
-
-# The server's XMTP dispatcher wallet PRIVATE key (keep this secret!)
-XMTP_WALLET_KEY=0xYourSendingPrivateKey
-
-# Your personal wallet where you want to receive push notifications
-XMTP_RECIPIENT_ADDRESS=0xClientAddress
+LOCUS_API_KEY=claw_dev_your_key_here
+TARGET_API_URL=https://your-actual-api.com/endpoint
 ```
 
-## 3. Register your Agent (Human Discount)
-To enable the **World ID 99% Discount** for your human-backed agents, they must register their agent wallets on-chain using the official Worldcoin CLI:
+## 3. Protect Your API
+
+RepGate acts as a reverse proxy. Set `TARGET_API_URL` to your real API endpoint. All requests to `/v1/generate` will be forwarded after reputation and balance checks pass.
+
+## 4. Agent Integration
+
+Agents send requests with the `x-agent-wallet` header:
 
 ```bash
-npx @worldcoin/agentkit-cli register 0xTheirAgentAddress
+curl -X POST https://your-repgate-instance.com/v1/generate \
+  -H "Content-Type: application/json" \
+  -H "x-agent-wallet: 0xAgentWalletAddress" \
+  -d '{"prompt": "Generate something"}'
 ```
-This triggers a verification dialog inside the World App. Once completed, the agent generates a verifiable proof of human backing without relying on easily-spoofed REST headers!
 
-## 4. Launch the Gateway
-Start your server. The built-in dashboard provides a live UI for tracking and revoking agent access.
+### Flow:
+1. **First request** → Agent receives a Locus Checkout URL to stake USDC
+2. **Payment** → Agent or human pays via the checkout link
+3. **Subsequent requests** → Deducted from stake balance, reputation grows
+4. **Higher reputation** → Lower costs per call
+
+## 5. Webhook Setup
+
+For production, set `PUBLIC_URL` to your publicly accessible URL and configure Locus webhooks:
+
+```env
+PUBLIC_URL=https://your-domain.com
+LOCUS_WEBHOOK_SECRET=whsec_from_locus
+```
+
+For local testing, use the simulate endpoint instead:
+```bash
+curl -X POST http://localhost:4021/webhook/locus/simulate \
+  -H "Content-Type: application/json" \
+  -d '{"wallet": "0xAgent...", "amount": 1}'
+```
+
+## 6. Launch
 
 ```bash
-# Development mode
-npm run dev
-
-# Production build
-npm run build
-npm start
+npm run dev     # Development
+npm run build   # Build for production
+npm start       # Production
 ```
 
-## 5. Next Steps
-Open `http://localhost:4021` (or your deployed domain) to view the **Live Transaction Dashboard**. You can physically **Revoke** agent sessions (Kill-Switch) straight from the UI!
-
-> 💡 **Customizing Data**: Swap the mock `/premium-data` endpoint in `src/index.ts` with your real backend logic. The gateway handles the validation for you—just check that `tx.revoked !== 1` and return your real product!
+Open `http://localhost:4021` to view the live reputation dashboard.

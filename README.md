@@ -1,165 +1,251 @@
-# GLIDE — Human-Aware API Gateway
+# RepGate — Reputation-Gated API Gateway
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Stack: World ID + x402 + XMTP](https://img.shields.io/badge/Stack-World%20ID%20+%20x402%20+%20XMTP-blueviolet)](https://world.org/)
-[![NPM Version](https://img.shields.io/npm/v/@0xshae/glide-gateway.svg)](https://www.npmjs.com/package/@0xshae/glide-gateway)
+[![Stack: Locus Checkout + USDC](https://img.shields.io/badge/Stack-Locus%20Checkout%20+%20USDC-blueviolet)](https://paywithlocus.com)
 
-**Middleware that verifies World ID and unlocks payments for human-backed agent requests.**
+**An API gateway that enforces access based on onchain reputation — agents stake USDC via Locus Checkout and earn lower rates through successful usage.**
 
-The internet wasn't built for machines. APIs can't tell if a request comes from a real human or a bot. Glide sits in front of any API and enforces a 3-tier access model based on **proof of humanity** — powered by World ID, x402 payments, and XMTP audit receipts.
-
----
-
-## Table of Contents
-- [Problem Statement](#problem-statement)
-- [How It Works (3-Tier Model)](#how-it-works)
-- [Technological Stack](#technological-stack)
-- [Architecture & File Structure](#architecture--file-structure)
-- [Technical Deep Dive — Middleware](#technical-deep-dive--middleware)
-- [Audit System — XMTP & Revocation](#audit-system--xmtp--revocation)
-- [Integration Guide](#integration-guide)
-- [Known Issues & Workarounds](#known-issues--workarounds)
+> Built for the [Paygentic Week 3 — CheckoutWithLocus](https://docs.paywithlocus.com/hackathon) hackathon.
 
 ---
 
-## The Problem Statement
-In the agentic economy, APIs are flooded by autonomous agents. Traditional "Pay-Per-API" models create a "Bot Tax" for humans: you shouldn't have to pay for every single request once you've proven you're a human person. Simultaneously, bots should pay to prevent spam and resource exhaustion.
+## The Problem
 
-**Glide solves this by:**
-1. **Granting free, high-speed access** to verified humans (World ID).
-2. **Enforcing on-chain settlement** for unverified bot traffic (x402).
-3. **Offering "Instant Premium" access** for humans who also pay for extra features.
-4. **Enabling "Strict Mode"**: Merchants can choose to completely block all bot traffic, ensuring their APIs are strictly human-only.
+APIs can't tell good agents from bad ones. New agents pay the same as veterans, and there's no incentive for agents to maintain a clean track record. Meanwhile, API providers eat the cost of abusive traffic.
+
+## The Solution
+
+**RepGate** sits in front of any API and enforces a 3-tier pricing model based on **onchain reputation**:
+
+| Tier | Score | Cost/Call | Requirements |
+|:-----|:------|:----------|:-------------|
+| 🥉 **Bronze** | 0–20 | $0.01 USDC | Must stake $1 USDC first |
+| 🥈 **Silver** | 21–50 | $0.005 USDC | — |
+| 🥇 **Gold** | 51–100 | $0.001 USDC | — |
+
+**Reputation score (0–100)** is computed from:
+- **Stake**: Each 0.1 USDC staked → +1 point (max 50)
+- **Success**: Each successful API call (2xx) → +0.5 point (max 50)
+- **Failure**: Each failed call (4xx/5xx) → -2 points
 
 ---
 
 ## How It Works
-Glide enforces a 3-Tier Access Model directly at the middleware layer:
 
-| Tier | Requirement | Priority | Cost | UX Effect |
-| :--- | :--- | :--- | :--- | :--- |
-| **BOT** | No World ID | Low | **$1.00 USDC** | 2000ms Throttle |
-| **HUMAN** | World ID (Proof of Personhood) | High | **$0.00** | <50ms Latency |
-| **PREMIUM**| World ID + x402 Payment | Instant | **$0.50 USDC**| <10ms + Ultra Quality |
-
-> [!TIP]
-> **Human-Only Integration**: For sensitive endpoints, Glide allows you to skip the payment tier entirely and reject any request that doesn't carry a valid Proof of Personhood.
-
----
-
-## Technological Stack
-- **Identity Layer**: [World ID](https://world.org/world-id) (Zk-Proofs for personhood).
-- **Payment Layer**: [x402 protocol](https://x402.org) (The HTTP-native payment standard).
-- **Network**: [Base Sepolia](https://base.org) (Fast, low-cost L2).
-- **Communication Layer**: [XMTP](https://xmtp.org) (Audit logs & receipts).
-- **Backend**: Node.js, Express, TypeScript, Better-SQLite3.
-- **Frontend**: Next.js 15 (Tailwind CSS, Framer Motion).
-
----
-
-## Architecture & File Structure
-
-```text
-.
-├── src/
-│   ├── index.ts           # Main Gateway entry (Express + x402 Resource Server)
-│   ├── config.ts          # Environment & Pricing configuration
-│   ├── db.ts              # SQLite layer for transaction persistence
-│   ├── agentkit.ts        # World ID AgentKit hooks & extensions
-│   ├── middleware/
-│   │   └── glide.ts       # THE CORE: 3-tier access control logic
-│   └── services/
-│       └── xmtp.ts        # Fire-and-forget Audit delivery system
-├── glide/                 # Next.js Dashboard & Landing Page
-├── scripts/               # End-to-end demo simulations (Bot/Human/Premium)
-└── README.md              # You are here
+```
+Agent → x-agent-wallet header → RepGate Middleware
+                                    ↓
+                        [Check reputation & balance]
+                            ↓              ↓
+                    Balance OK?       No balance?
+                        ↓                  ↓
+                  Deduct cost      Return Locus
+                  Forward to       Checkout URL
+                  target API       (HTTP 402)
+                        ↓
+                  Update reputation
+                  based on response
 ```
 
+1. Agent sends request with `x-agent-wallet` header
+2. RepGate computes reputation score → determines tier → calculates cost
+3. If insufficient balance: returns a Locus Checkout URL for staking
+4. If balance OK: deducts cost, forwards request to target API
+5. On response: updates reputation (+0.5 for success, -2 for failure)
+6. Returns response with reputation metadata in headers
+
 ---
 
-## Technical Deep Dive — Middleware
+## Quick Start
 
-The heart of Glide is the `glideMiddleware` which resolves the access tier before the request even reaches your business logic.
+### 1. Clone & Install
 
-### Tier Resolution Logic
-The system inspects incoming HTTP headers to determine the request's "DNA":
-```typescript
-function resolveTier(req: Request): GlideTier {
-  const hasWorldId = !!req.headers["x-world-id-proof"];
-  const hasPaid = !!req.headers["x-payment-verified"];
-
-  if (hasWorldId && hasPaid) return "premium";
-  if (hasWorldId)            return "human";
-  return "bot";
-}
+```bash
+git clone https://github.com/0xshae/paygentic-week3.git
+cd paygentic-week3
+npm install
 ```
 
-### Policy Enforcement
-Once the tier is resolved, Glide applies the policy (throtlling, payment gating, or instant passthrough):
-- **Bot Tier**: If no payment is detected, it triggers a 402 Payment Required response via the `@x402/express` server. In demo mode, it applies a `botDelayMs` (default 2s) to simulate resource throttling. 
-  - *Strict Mode*: Developers can configure the middleware to return a `403 Forbidden` if no World ID is present, effectively purging all non-human traffic.
-- **Human Tier**: Bypasses payment requirements entirely if a valid World ID proof is detected.
+### 2. Configure Environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+PORT=4021
+LOCUS_API_KEY=claw_dev_your_key_here
+LOCUS_WEBHOOK_SECRET=whsec_your_secret_here
+TARGET_API_URL=https://httpbin.org/post
+PUBLIC_URL=http://localhost:4021
+```
+
+| Variable | Description |
+|----------|-------------|
+| `LOCUS_API_KEY` | Your Locus beta API key (get one at [beta.paywithlocus.com](https://beta.paywithlocus.com)) |
+| `LOCUS_WEBHOOK_SECRET` | Webhook signing secret from Locus (optional for demo) |
+| `TARGET_API_URL` | The real API to proxy (defaults to httpbin.org) |
+| `PUBLIC_URL` | Your public URL for webhook callbacks |
+
+### 3. Start the Server
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:4021](http://localhost:4021) for the live dashboard.
 
 ---
 
-## Audit System — XMTP & Revocation
+## Demo Walkthrough
 
-Every paid or human-verified transaction generates a structured audit receipt sent via XMTP. This allows human owners to monitor what their autonomous agents are doing in real-time.
+### Agent A — Brand New, Never Staked
 
-### The Payload
-Glide uses `@xmtp/agent-sdk` to deliver JSON payloads:
+```bash
+bash scripts/demo-agent-a.sh
+```
+
+Shows:
+1. First call → `402` with Locus Checkout URL
+2. Simulated payment → $1 USDC stake added
+3. Reputation jumps from 0 → 10
+4. 10 successful calls → reputation climbs to ~14
+5. Each call costs $0.01 (Bronze tier)
+
+### Agent B — Trusted, Pre-Funded
+
+```bash
+bash scripts/demo-agent-b.sh
+```
+
+Shows:
+1. Pre-seeded with $5 USDC + 20 successful calls (reputation ~50)
+2. Starts at Silver tier ($0.005/call)
+3. After a few calls, crosses into Gold tier ($0.001/call)
+4. 20 calls for just $0.032 total vs $0.20 at Bronze prices
+
+---
+
+## API Reference
+
+### Protected Endpoint
+
+```bash
+# POST /v1/generate
+curl -X POST http://localhost:4021/v1/generate \
+  -H "Content-Type: application/json" \
+  -H "x-agent-wallet: 0xYourAgentWallet" \
+  -d '{"prompt": "hello"}'
+```
+
+**Success (200):**
 ```json
 {
-  "type": "AGENT_TRANSACTION",
-  "merchant": "AgenticStore_v1",
-  "cost": "1.00",
-  "currency": "USDC",
-  "status": "SETTLED",
-  "short_code": "xJ8-7k2P1",
-  "revoke_url": "https://gateway.glide.com/revoke?code=xJ8-7k2P1"
+  "data": { /* response from target API */ },
+  "repgate": {
+    "wallet": "0xYourAgentWallet",
+    "reputation": 14,
+    "tier": "Bronze",
+    "cost_deducted": 0.01,
+    "balance_remaining": 0.9,
+    "next_call_cost": 0.01
+  }
 }
 ```
 
-### The Kill Switch
-The `revoke_url` included in the XMTP message allows a human to instantly revoke an agent's access token stored in Glide's SQLite database. If a token is revoked, the `/premium-data` endpoint will reject all subsequent requests from that agent.
+**Stake Required (402):**
+```json
+{
+  "action": "stake_required",
+  "checkout_url": "https://checkout.paywithlocus.com/session_abc123",
+  "min_stake": 1,
+  "current_balance": 0,
+  "reputation": 0,
+  "tier": "Bronze"
+}
+```
+
+### Webhook
+
+```bash
+# Real Locus webhook
+POST /webhook/locus
+
+# Simulate payment (for demo)
+POST /webhook/locus/simulate
+curl -X POST http://localhost:4021/webhook/locus/simulate \
+  -H "Content-Type: application/json" \
+  -d '{"wallet": "0xYourWallet", "amount": 1}'
+```
+
+### Dashboard APIs
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/agents` | List all agents with reputation scores |
+| `GET /api/agents/:wallet` | Get single agent details |
+| `GET /api/agents/:wallet/log` | Get call audit log |
+| `GET /api/calls` | Recent calls across all agents |
+| `GET /api/stats` | Aggregate statistics |
+| `GET /api/events` | SSE live event stream |
+| `POST /api/seed` | Seed an agent (for demo) |
 
 ---
 
-## Integration Guide
+## Architecture
 
-Glide is designed to be developer-first. You can wrap any existing API endpoint in less than 5 minutes.
-
-1. **Install Glide**:
-   `npm install @0xshae/glide-gateway`
-
-2. **Mount the Middleware**:
-```typescript
-import { glideMiddleware } from "@0xshae/glide-gateway";
-
-app.get("/api/ai-generate", 
-  glideMiddleware({ 
-    requireWorldId: true, 
-    fallback: "pay", 
-    botDelayMs: 2000 
-  }), 
-  (req, res) => {
-    // Your actual business logic reached after identity/payment verification
-    const { glideTier } = req as any;
-    res.json({ message: `Access granted for ${glideTier}` });
-  }
-);
+```
+paygentic-week3/
+├── src/
+│   ├── index.ts                 # Express server + all routes
+│   ├── config.ts                # Environment config + tier definitions
+│   ├── db.ts                    # SQLite schema + data access layer
+│   ├── reputation.ts            # Score computation + tier resolution
+│   ├── locus.ts                 # Locus Checkout session creation + webhooks
+│   └── middleware/
+│       └── reputation.ts        # Request interception + balance gating
+├── public/
+│   └── index.html               # Live dashboard (glassmorphism UI)
+├── scripts/
+│   ├── demo-agent-a.sh          # New agent demo script
+│   ├── demo-agent-b.sh          # Trusted agent demo script
+│   └── seed-agent-b.sh          # Pre-fund Agent B
+├── .env.example
+├── package.json
+└── tsconfig.json
 ```
 
 ---
 
-## Known Issues & Workarounds
+## Technology Stack
 
-- **Network Support**: The x402 facilitator currently does not support World Sepolia (eip155:4801). 
-  - *Workaround*: We use **Base Sepolia** (eip155:84532) for all payment settlements while utilizing World ID for identity.
-- **XMTP Identity**: XMTP delivery requires the `XMTP_RECIPIENT_ADDRESS` to be different from the `XMTP_WALLET_KEY` address to avoid self-messaging loops. 
-  - *Fix*: Ensure two distinct wallets are configured in your `.env`.
-- **Latency Simulation**: In our current hackathon build, the "Bot Delay" is artificial (setTimeout) to visually demonstrate the difference in quality of service. In production, this would be an actual rate-limiting bucket.
+- **Backend**: Node.js + Express + TypeScript
+- **Database**: SQLite (via better-sqlite3) — local reputation cache
+- **Payments**: [Locus Checkout SDK](https://docs.paywithlocus.com/checkout/index) — USDC payments
+- **Network**: Base (USDC)
+- **Target API**: Any HTTP endpoint (httpbin.org for demo)
 
 ---
 
-### GLIDE: Building the Identity-Aware Web 3.0.
+## Locus Integration
+
+RepGate uses [Locus Checkout](https://docs.paywithlocus.com/checkout/index) for agent staking:
+
+1. **Session Creation**: When an agent needs to stake, RepGate creates a Locus Checkout session via the SDK
+2. **Payment**: Agent (or human) pays at the checkout URL using Locus Wallet, external wallet, or agent API
+3. **Webhook**: Locus sends `checkout.session.paid` to `/webhook/locus`
+4. **Balance Update**: RepGate adds the USDC to the agent's stake balance
+
+For local development, use the simulate endpoint:
+```bash
+POST /webhook/locus/simulate
+{"wallet": "0x...", "amount": 1}
+```
+
+---
+
+## License
+
+MIT
