@@ -1,4 +1,4 @@
-# AgentCred — Reputation-Gated API Gateway
+# AgentCred — Onchain Reputation for Agents
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Stack: Locus Checkout + USDC](https://img.shields.io/badge/Stack-Locus%20Checkout%20+%20USDC-blueviolet)](https://paywithlocus.com)
