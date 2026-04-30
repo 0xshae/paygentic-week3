@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentCred — Live Demo Dashboard</title>
+  <meta name="description" content="Real-time simulation of the AgentCred reputation-gated API gateway." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── Reset & Base ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0a0a0f;
+      color: #e0e0e8;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Animated Background ──────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 50%, rgba(99, 50, 255, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(0, 210, 255, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 80%, rgba(255, 61, 113, 0.05) 0%, transparent 50%);
+      z-index: -1;
+      animation: bgShift 20s ease-in-out infinite alternate;
+    }
+
+    @keyframes bgShift {
+      0% { opacity: 0.8; }
+      100% { opacity: 1; }
+    }
+
+    /* ─── Header ───────────────────────────────────── */
+    header {
+      padding: 1.5rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(20px);
+      background: rgba(10, 10, 15, 0.7);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #6332ff, #00d2ff);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: white;
+    }
+
+    .logo h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      background: linear-gradient(90deg, #6332ff, #00d2ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-tagline {
+      font-size: 0.7rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .simulated-badge {
+      font-size: 0.7rem;
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.1);
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid rgba(251, 191, 36, 0.2);
+    }
+
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      color: #00ff88;
+      background: rgba(0, 255, 136, 0.08);
+      padding: 0.3rem 0.7rem;
+      border-radius: 20px;
+      border: 1px solid rgba(0, 255, 136, 0.15);
+    }
+
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      background: #00ff88;
+      border-radius: 50%;
+      animation: livePulse 2s ease-in-out infinite;
+    }
+
+    @keyframes livePulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(0, 255, 136, 0); }
+    }
+
+    /* ─── Main Layout ──────────────────────────────── */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* ─── Stat Cards ───────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 1.25rem;
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      border-color: rgba(99, 50, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(99, 50, 255, 0.1);
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #fff, #aaa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .stat-value.highlight-purple {
+      background: linear-gradient(135deg, #a78bfa, #6332ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .stat-value.highlight-cyan {
+      background: linear-gradient(135deg, #67e8f9, #00d2ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .stat-value.highlight-green {
+      background: linear-gradient(135deg, #86efac, #00ff88);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .stat-value.highlight-amber {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* ─── Panels ───────────────────────────────────── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .content-grid { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #ccc;
+    }
+
+    .panel-body {
+      padding: 0;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .panel-body::-webkit-scrollbar { width: 4px; }
+    .panel-body::-webkit-scrollbar-track { background: transparent; }
+    .panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    /* ─── Leaderboard ──────────────────────────────── */
+    .agent-row {
+      display: grid;
+      grid-template-columns: 40px 1fr 80px 70px 80px;
+      align-items: center;
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      transition: background 0.2s ease;
+      gap: 0.5rem;
+    }
+
+    .agent-row:hover { background: rgba(255,255,255,0.03); }
+
+    .agent-rank {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #666;
+    }
+
+    .agent-rank.top-1 { color: #fbbf24; }
+    .agent-rank.top-2 { color: #94a3b8; }
+    .agent-rank.top-3 { color: #cd7f32; }
+
+    .agent-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      min-width: 0;
+    }
+
+    .agent-wallet {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #ddd;
+      font-family: 'SF Mono', 'Menlo', monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .agent-calls {
+      font-size: 0.65rem;
+      color: #888;
+    }
+
+    /* ─── Reputation Bar ───────────────────────────── */
+    .rep-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .rep-score {
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .rep-bar {
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .rep-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    .rep-fill.bronze { background: linear-gradient(90deg, #cd7f32, #e8a87c); }
+    .rep-fill.silver { background: linear-gradient(90deg, #94a3b8, #cbd5e1); }
+    .rep-fill.gold { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+
+    /* ─── Tier Badge ───────────────────────────────── */
+    .tier-badge {
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .tier-badge.bronze {
+      background: rgba(205, 127, 50, 0.15);
+      color: #e8a87c;
+      border: 1px solid rgba(205, 127, 50, 0.2);
+    }
+
+    .tier-badge.silver {
+      background: rgba(148, 163, 184, 0.15);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .tier-badge.gold {
+      background: rgba(251, 191, 36, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(251, 191, 36, 0.2);
+    }
+
+    /* ─── Balance ──────────────────────────────────── */
+    .balance {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #00ff88;
+      text-align: right;
+    }
+
+    /* ─── Live Feed ────────────────────────────────── */
+    .feed-item {
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      animation: feedSlideIn 0.3s ease;
+    }
+
+    @keyframes feedSlideIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .feed-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.3rem;
+    }
+
+    .feed-wallet {
+      font-size: 0.75rem;
+      font-family: 'SF Mono', 'Menlo', monospace;
+      color: #aaa;
+    }
+
+    .feed-time {
+      font-size: 0.65rem;
+      color: #666;
+    }
+
+    .feed-details {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.7rem;
+    }
+
+    .feed-detail {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .feed-detail .label { color: #888; }
+    .feed-detail .value { font-weight: 600; }
+    .feed-detail .value.positive { color: #00ff88; }
+    .feed-detail .value.negative { color: #ff3d71; }
+    .feed-detail .value.cost { color: #fbbf24; }
+
+    /* ─── Empty State ──────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: #555;
+    }
+
+    .empty-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-text {
+      font-size: 0.8rem;
+    }
+
+    /* ─── Footer ───────────────────────────────────── */
+    footer {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 1.5rem 2rem;
+      text-align: center;
+      font-size: 0.7rem;
+      color: #555;
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+
+    footer a {
+      color: #6332ff;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/" class="logo">
+      <div class="logo-icon">AC</div>
+      <div>
+        <h1>AgentCred</h1>
+        <div class="logo-tagline">Reputation-Gated API Gateway</div>
+      </div>
+    </a>
+    <div class="header-right">
+      <div class="simulated-badge">SIMULATED DEMO</div>
+      <div class="live-badge">
+        <span class="live-dot"></span>
+        LIVE
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Stats -->
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card">
+        <div class="stat-label">Total Agents</div>
+        <div class="stat-value highlight-purple" id="statAgents">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Calls</div>
+        <div class="stat-value highlight-cyan" id="statCalls">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">USDC Collected</div>
+        <div class="stat-value highlight-green" id="statUsdc">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Reputation</div>
+        <div class="stat-value highlight-amber" id="statRep">0</div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content-grid">
+      <!-- Leaderboard -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">🏆 Agent Leaderboard</span>
+        </div>
+        <div class="panel-body" id="leaderboard">
+          <div class="empty-state">
+            <div class="empty-icon">🤖</div>
+            <div class="empty-text">Loading agents...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Feed -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">📡 Live Call Feed</span>
+          <span id="feedCount" style="font-size: 0.7rem; color: #666;">0 calls</span>
+        </div>
+        <div class="panel-body" id="feedBody">
+          <div class="empty-state" id="feedEmpty">
+            <div class="empty-icon">📡</div>
+            <div class="empty-text">Waiting for API calls...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Powered by <a href="https://paywithlocus.com" target="_blank">Locus Checkout</a> — USDC payments for the agent economy
+  </footer>
+
+  <script>
+    // ─── Simulated State ──────────────────────────────
+    const agents = [
+      {
+        wallet: "0xProAgent_Established_HighRep_001",
+        tier: "Gold",
+        reputation: 68.2,
+        successful_calls: 135,
+        failed_calls: 2,
+        total_spent: 0.145,
+        stake_balance: 4.855,
+        cost_per_call: 0.001
+      },
+      {
+        wallet: "0xNewAgent_1777580922",
+        tier: "Bronze",
+        reputation: 12.5,
+        successful_calls: 5,
+        failed_calls: 0,
+        total_spent: 0.05,
+        stake_balance: 0.95,
+        cost_per_call: 0.01
+      },
+      {
+        wallet: "0xTradingBot_Fast_0x889",
+        tier: "Silver",
+        reputation: 34.0,
+        successful_calls: 48,
+        failed_calls: 1,
+        total_spent: 0.24,
+        stake_balance: 1.76,
+        cost_per_call: 0.005
+      }
+    ];
+
+    let totalCalls = 188;
+    let totalUsdc = 0.435;
+    let feedCount = 0;
+
+    function getAvgRep() {
+      return agents.reduce((sum, a) => sum + a.reputation, 0) / agents.length;
+    }
+
+    function truncate(addr) {
+      if (!addr) return 'Unknown';
+      if (addr.length <= 14) return addr;
+      return addr.slice(0, 8) + '…' + addr.slice(-4);
+    }
+
+    function tierClass(tier) {
+      return (tier || 'bronze').toLowerCase();
+    }
+
+    function formatTime(ms) {
+      return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    function updateTier(agent) {
+      if (agent.reputation >= 51) {
+        agent.tier = "Gold";
+        agent.cost_per_call = 0.001;
+      } else if (agent.reputation >= 21) {
+        agent.tier = "Silver";
+        agent.cost_per_call = 0.005;
+      } else {
+        agent.tier = "Bronze";
+        agent.cost_per_call = 0.01;
+      }
+    }
+
+    // ─── Render Stats ─────────────────────────────────
+    function renderStats() {
+      document.getElementById('statAgents').textContent = agents.length;
+      document.getElementById('statCalls').textContent = totalCalls.toLocaleString();
+      document.getElementById('statUsdc').textContent = '$' + totalUsdc.toFixed(4);
+      document.getElementById('statRep').textContent = getAvgRep().toFixed(1);
+    }
+
+    // ─── Render Leaderboard ───────────────────────────
+    function renderLeaderboard() {
+      const container = document.getElementById('leaderboard');
+      
+      // Sort by reputation desc
+      const sortedAgents = [...agents].sort((a, b) => b.reputation - a.reputation);
+
+      container.innerHTML = '';
+      sortedAgents.forEach((agent, i) => {
+        const tc = tierClass(agent.tier);
+        const rank = i + 1;
+        const rankClass = rank <= 3 ? ` top-${rank}` : '';
+
+        const row = document.createElement('div');
+        row.className = 'agent-row';
+        row.innerHTML = `
+          <div class="agent-rank${rankClass}">#${rank}</div>
+          <div class="agent-info">
+            <div class="agent-wallet">${truncate(agent.wallet)}</div>
+            <div class="agent-calls">${agent.successful_calls} ok · ${agent.failed_calls} fail · $${agent.total_spent.toFixed(4)} spent</div>
+          </div>
+          <div class="rep-container">
+            <div class="rep-score" style="color: ${tc === 'gold' ? '#fbbf24' : tc === 'silver' ? '#94a3b8' : '#cd7f32'}">${agent.reputation.toFixed(1)}</div>
+            <div class="rep-bar"><div class="rep-fill ${tc}" style="width: ${Math.min(agent.reputation, 100)}%"></div></div>
+          </div>
+          <div class="tier-badge ${tc}">${agent.tier}</div>
+          <div class="balance">$${agent.stake_balance.toFixed(3)}</div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    // ─── Add Feed Event ───────────────────────────────
+    function addFeedEvent(agent, scoreBefore, cost) {
+      const feedBody = document.getElementById('feedBody');
+      const feedEmpty = document.getElementById('feedEmpty');
+      
+      if (feedEmpty) {
+        feedBody.innerHTML = '';
+      }
+
+      feedCount++;
+
+      const scoreChange = agent.reputation - scoreBefore;
+      const changeClass = scoreChange >= 0 ? 'positive' : 'negative';
+      const changeSymbol = scoreChange >= 0 ? '+' : '';
+
+      const item = document.createElement('div');
+      item.className = 'feed-item';
+      item.innerHTML = `
+        <div class="feed-header">
+          <span class="feed-wallet">${truncate(agent.wallet)}</span>
+          <span class="feed-time">${formatTime(Date.now())}</span>
+        </div>
+        <div class="feed-details">
+          <div class="feed-detail">
+            <span class="label">Rep:</span>
+            <span class="value ${changeClass}">${scoreBefore.toFixed(1)} → ${agent.reputation.toFixed(1)} (${changeSymbol}${scoreChange.toFixed(1)})</span>
+          </div>
+          <div class="feed-detail">
+            <span class="label">Cost:</span>
+            <span class="value cost">$${cost}</span>
+          </div>
+          <div class="feed-detail">
+            <span class="label">Tier:</span>
+            <span class="value">${agent.tier}</span>
+          </div>
+          <div class="feed-detail">
+            <span class="label">Bal:</span>
+            <span class="value">$${agent.stake_balance.toFixed(4)}</span>
+          </div>
+        </div>
+      `;
+
+      feedBody.prepend(item);
+
+      // Keep max 50 items
+      while (feedBody.children.length > 50) {
+        feedBody.removeChild(feedBody.lastChild);
+      }
+
+      document.getElementById('feedCount').textContent = `${feedCount} calls`;
+    }
+
+    // ─── Simulate Call ────────────────────────────────
+    function simulateCall() {
+      // Pick random agent
+      const agent = agents[Math.floor(Math.random() * agents.length)];
+      
+      // Save state before
+      const scoreBefore = agent.reputation;
+      const cost = agent.cost_per_call;
+
+      // Update agent state
+      agent.successful_calls++;
+      agent.reputation = Math.min(100, agent.reputation + 0.5);
+      agent.stake_balance = Math.max(0, agent.stake_balance - cost);
+      agent.total_spent += cost;
+      
+      // Update global state
+      totalCalls++;
+      totalUsdc += cost;
+
+      updateTier(agent);
+      
+      // Update UI
+      renderStats();
+      renderLeaderboard();
+      addFeedEvent(agent, scoreBefore, cost);
+
+      // Schedule next call
+      const nextDelay = Math.random() * 3000 + 1000; // 1-4 seconds
+      setTimeout(simulateCall, nextDelay);
+    }
+
+    // ─── Init ─────────────────────────────────────────
+    renderStats();
+    renderLeaderboard();
+    
+    // Start simulation shortly after load
+    setTimeout(simulateCall, 1500);
+
+  </script>
+</body>
+</html>
