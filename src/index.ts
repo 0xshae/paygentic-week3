@@ -2,23 +2,21 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import express, { Request, Response } from "express";
-import {
-  paymentMiddlewareFromHTTPServer,
-  x402ResourceServer,
-  x402HTTPResourceServer,
-} from "@x402/express";
-import { ExactEvmScheme } from "@x402/evm/exact/server";
-import { HTTPFacilitatorClient } from "@x402/core/server";
 import { config } from "./config";
+import { reputationMiddleware, type ReputationData } from "./middleware/reputation";
+import { getReputation, getTier, updateAfterCall } from "./reputation";
 import {
-  agentkitHooks,
-  agentkitResourceServerExtension,
-  getAgentkitExtension,
-} from "./agentkit";
-import { glideMiddleware, GlideTier } from "./middleware/glide";
-import { sendAuditMessage } from "./services/xmtp";
-import { getTransaction, revokeTransaction, insertTransaction, getAllTransactions } from "./db";
-import { nanoid } from "nanoid";
+  getAgent,
+  ensureAgent,
+  getTopAgents,
+  getAllAgents,
+  getCallLog,
+  getRecentCalls,
+  getAgentStats,
+  recordCall,
+  addStake,
+} from "./db";
+import { handleWebhook, handleSimulateWebhook } from "./locus";
 import { EventEmitter } from "events";
 
 const eventBus = new EventEmitter();
@@ -28,331 +26,319 @@ app.use(express.json());
 app.use(express.static("public"));
 
 // ─────────────────────────────────────────────────────
-// x402 Resource Server + AgentKit Extension
-// ─────────────────────────────────────────────────────
-
-const facilitatorClient = new HTTPFacilitatorClient({
-  url: config.facilitatorUrl,
-});
-
-const resourceServer = new x402ResourceServer(facilitatorClient)
-  .register(config.baseSepolia, new ExactEvmScheme())
-  // Note: World Sepolia (eip155:4801) not yet supported by x402.org facilitator
-  .registerExtension(agentkitResourceServerExtension);
-
-// ─────────────────────────────────────────────────────
-// Route configuration — x402 Payment Gate
-// ─────────────────────────────────────────────────────
-
-const routes = {
-  "GET /checkout": {
-    accepts: [
-      {
-        scheme: "exact" as const,
-        price: config.botPrice,        // $1.00 — full Bot Tax
-        network: config.baseSepolia,   // Base Sepolia (CAIP-2)
-        payTo: config.merchantWallet,
-      },
-    ],
-    description: "Glide Gateway — Bot Tier ($1.00 USDC)",
-    mimeType: "application/json",
-    extensions: getAgentkitExtension(),
-  },
-  "GET /checkout-premium": {
-    accepts: [
-      {
-        scheme: "exact" as const,
-        price: config.premiumPrice,    // $0.50 — Premium Tier
-        network: config.baseSepolia,
-        payTo: config.merchantWallet,
-      },
-    ],
-    description: "Glide Gateway — Premium Tier ($0.50 USDC + World ID)",
-    mimeType: "application/json",
-    extensions: getAgentkitExtension(),
-  },
-};
-
-// ─────────────────────────────────────────────────────
-// HTTP Server with AgentKit hooks
-// ─────────────────────────────────────────────────────
-
-const httpServer = new x402HTTPResourceServer(resourceServer, routes)
-  .onProtectedRequest(agentkitHooks.requestHook);
-
-// Mount x402 + AgentKit payment middleware
-app.use(paymentMiddlewareFromHTTPServer(httpServer));
-
-// ─────────────────────────────────────────────────────
-// Health check
+// Health Check
 // ─────────────────────────────────────────────────────
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({
     status: "ok",
-    version: "3.0.0",
-    gateway: "Glide — Human-Aware API Gateway",
+    version: "1.0.0",
+    gateway: "RepGate — Reputation-Gated API Gateway",
     timestamp: Date.now(),
   });
 });
 
 // ─────────────────────────────────────────────────────
-// GET /checkout — Legacy x402 Payment Gate
+// POST /v1/generate — The Protected API Endpoint
+//   1. Reputation middleware gates access
+//   2. Forward to target API
+//   3. Update reputation based on response
+//   4. Return response with reputation metadata
 // ─────────────────────────────────────────────────────
 
-app.get("/checkout", (req: Request, res: Response) => {
-  // If we reach here, x402 payment was verified
-  const agentId = req.headers["x-agent-id"] as string | undefined;
+app.post(
+  "/v1/generate",
+  reputationMiddleware(),
+  async (req: Request, res: Response) => {
+    const repData = (req as any).repData as ReputationData;
+    const prompt = req.body?.prompt || req.query?.prompt || "Hello, world!";
 
-  const short_code = nanoid(10);
-  insertTransaction({
-    shortCode: short_code,
-    humanId: null,
-    amount: config.botPrice,
-    agentId: agentId || null,
-  });
+    console.log(`[Proxy] → Forwarding request for ${repData.wallet.slice(0, 10)}... (prompt: "${String(prompt).slice(0, 50)}")`);
 
-  const txRecord = getTransaction(short_code);
-  if (txRecord) eventBus.emit("transaction", txRecord);
+    let statusCode = 200;
+    let apiResponse: any;
 
-  sendAuditMessage({
-    shortCode: short_code,
-    amount: config.botPrice,
-    agentId: agentId || null,
-    humanId: null,
-  }).catch(console.error);
+    try {
+      // Forward to target API (httpbin.org/post for demo)
+      const targetRes = await fetch(config.targetApiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          agent: repData.wallet,
+          tier: repData.tierName,
+          timestamp: new Date().toISOString(),
+        }),
+      });
 
-  res.status(200).json({
-    status: "SETTLED",
-    transaction: {
-      amount: config.botPrice,
-      currency: config.asset,
-      network: config.baseSepolia,
-      short_code: short_code,
-    },
-    gateway: {
-      name: "Glide",
-      version: "3.0.0",
-    },
-    message: "Payment verified. Use the short_code as a Bearer token to access /premium-data",
-  });
-});
+      statusCode = targetRes.status;
+      apiResponse = await targetRes.json().catch(() => ({ status: statusCode }));
+    } catch (err: any) {
+      console.error(`[Proxy] ❌ Target API error: ${err.message}`);
+      statusCode = 502;
+      apiResponse = { error: "Target API unavailable", message: err.message };
+    }
 
-// ─────────────────────────────────────────────────────
-// GET /checkout-premium — Premium Tier (World ID + $0.50)
-// ─────────────────────────────────────────────────────
+    // Update reputation based on response status
+    const scoreBefore = repData.score;
+    updateAfterCall(repData.wallet, statusCode);
+    const scoreAfter = getReputation(repData.wallet);
+    const tierAfter = getTier(scoreAfter);
 
-app.get("/checkout-premium", (req: Request, res: Response) => {
-  const agentId = req.headers["x-agent-id"] as string | undefined;
-  const worldIdProof = req.headers["x-world-id-proof"] as string | undefined;
-
-  const short_code = nanoid(10);
-  insertTransaction({
-    shortCode: short_code,
-    humanId: worldIdProof ? agentId || "verified-human" : null,
-    amount: config.premiumPrice,
-    agentId: agentId || null,
-  });
-
-  const txRecord = getTransaction(short_code);
-  if (txRecord) eventBus.emit("transaction", txRecord);
-
-  sendAuditMessage({
-    shortCode: short_code,
-    amount: config.premiumPrice,
-    agentId: agentId || null,
-    humanId: worldIdProof ? "verified" : null,
-  }).catch(console.error);
-
-  res.status(200).json({
-    status: "SETTLED",
-    tier: "premium",
-    priority: "instant",
-    verified: !!worldIdProof,
-    transaction: {
-      amount: config.premiumPrice,
-      currency: config.asset,
-      network: config.baseSepolia,
-      short_code: short_code,
-    },
-    gateway: { name: "Glide", version: "3.0.0" },
-    message: "Premium tier — World ID verified + payment settled on-chain.",
-  });
-});
-
-// ─────────────────────────────────────────────────────
-// 🌟 GET /api/generate — The Glide Demo Endpoint
-//    3-Tier Human-Aware Access:
-//      bot     → slow + expensive (2s delay)
-//      human   → fast + free
-//      premium → instant + premium
-// ─────────────────────────────────────────────────────
-
-app.get(
-  "/api/generate",
-  glideMiddleware({ requireWorldId: true, fallback: "rate-limit", botDelayMs: 2000 }),
-  (req: Request, res: Response) => {
-    const tier = (req as any).glideTier as GlideTier;
-    const priority = (req as any).glidePriority as string;
-    const verified = (req as any).glideVerified as boolean;
-    const agentId = req.headers["x-agent-id"] as string || "anonymous";
-
-    // Record the request as a transaction for the dashboard
-    const short_code = nanoid(10);
-    insertTransaction({
-      shortCode: short_code,
-      humanId: verified ? agentId : null,
-      amount: tier === "bot" ? config.botPrice : tier === "premium" ? "$0.50" : "$0.00",
-      agentId,
+    // Record the call in the audit log
+    recordCall({
+      wallet: repData.wallet,
+      endpoint: "/v1/generate",
+      statusCode,
+      cost: repData.costPerCall,
+      reputationBefore: scoreBefore,
+      reputationAfter: scoreAfter,
+      balanceBefore: repData.balanceBefore,
+      balanceAfter: repData.balanceAfter,
     });
 
-    const txRecord = getTransaction(short_code);
-    if (txRecord) eventBus.emit("transaction", txRecord);
+    // Emit event for SSE dashboard
+    eventBus.emit("call", {
+      wallet: repData.wallet,
+      endpoint: "/v1/generate",
+      statusCode,
+      cost: repData.costPerCall,
+      scoreBefore,
+      scoreAfter,
+      tierBefore: repData.tierName,
+      tierAfter: tierAfter.name,
+      balanceBefore: repData.balanceBefore,
+      balanceAfter: repData.balanceAfter,
+      timestamp: Date.now(),
+    });
 
-    // Build tiered response
-    const now = new Date().toISOString();
-    const responses: Record<GlideTier, object> = {
-      bot: {
-        status: "OK",
-        tier: "bot",
-        priority: "low",
-        verified: false,
-        latency: "~2000ms (throttled)",
-        message: "Request processed. No World ID detected — throttled and expensive.",
-        hint: "Add X-World-ID-Proof header for instant, free access.",
-        data: {
-          imageUrl: "https://placeholder.co/512x512/222/666?text=Low+Priority",
-          quality: "standard",
-          timestamp: now,
-        },
-      },
-      human: {
-        status: "OK",
-        tier: "human",
-        priority: "high",
-        verified: true,
-        latency: "<50ms",
-        message: "World ID verified — instant access, no payment required.",
-        data: {
-          imageUrl: "https://placeholder.co/1024x1024/1a1a2e/e0e0ff?text=Human+Verified",
-          quality: "high",
-          resolution: "1024x1024",
-          timestamp: now,
-        },
-      },
-      premium: {
-        status: "OK",
-        tier: "premium",
-        priority: "instant",
-        verified: true,
-        latency: "<10ms",
-        message: "World ID + Payment — premium tier unlocked.",
-        data: {
-          imageUrl: "https://placeholder.co/2048x2048/0d0d1a/c0c0ff?text=Premium+Tier",
-          quality: "ultra",
-          resolution: "2048x2048",
-          upscaled: true,
-          timestamp: now,
-        },
-      },
-    };
+    const scoreChange = scoreAfter - scoreBefore;
+    const arrow = scoreChange >= 0 ? "↑" : "↓";
+    console.log(
+      `[Proxy] ← ${statusCode} | Reputation: ${scoreBefore} → ${scoreAfter} (${arrow}${Math.abs(scoreChange)}) | Tier: ${tierAfter.name} | Cost: $${repData.costPerCall}`
+    );
 
-    res.status(200).json(responses[tier]);
+    // Return response with reputation metadata in headers
+    res.set("X-RepGate-Score", String(scoreAfter));
+    res.set("X-RepGate-Tier", tierAfter.name);
+    res.set("X-RepGate-Cost", String(repData.costPerCall));
+    res.set("X-RepGate-Balance", String(repData.balanceAfter));
+
+    res.status(statusCode >= 400 ? statusCode : 200).json({
+      // Wrap the actual API response with reputation metadata
+      data: apiResponse,
+      repgate: {
+        wallet: repData.wallet,
+        reputation: scoreAfter,
+        tier: tierAfter.name,
+        cost_deducted: repData.costPerCall,
+        balance_remaining: Math.round(repData.balanceAfter * 10000) / 10000,
+        next_call_cost: tierAfter.costPerCall,
+      },
+    });
+  }
+);
+
+// Also support GET for convenience
+app.get(
+  "/v1/generate",
+  reputationMiddleware(),
+  async (req: Request, res: Response) => {
+    const repData = (req as any).repData as ReputationData;
+    const prompt = req.query?.prompt || "Hello, world!";
+
+    let statusCode = 200;
+    let apiResponse: any;
+
+    try {
+      const targetRes = await fetch(config.targetApiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          agent: repData.wallet,
+          tier: repData.tierName,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+      statusCode = targetRes.status;
+      apiResponse = await targetRes.json().catch(() => ({ status: statusCode }));
+    } catch (err: any) {
+      statusCode = 502;
+      apiResponse = { error: "Target API unavailable", message: err.message };
+    }
+
+    const scoreBefore = repData.score;
+    updateAfterCall(repData.wallet, statusCode);
+    const scoreAfter = getReputation(repData.wallet);
+    const tierAfter = getTier(scoreAfter);
+
+    recordCall({
+      wallet: repData.wallet,
+      endpoint: "/v1/generate",
+      statusCode,
+      cost: repData.costPerCall,
+      reputationBefore: scoreBefore,
+      reputationAfter: scoreAfter,
+      balanceBefore: repData.balanceBefore,
+      balanceAfter: repData.balanceAfter,
+    });
+
+    eventBus.emit("call", {
+      wallet: repData.wallet,
+      endpoint: "/v1/generate",
+      statusCode,
+      cost: repData.costPerCall,
+      scoreBefore,
+      scoreAfter,
+      tierBefore: repData.tierName,
+      tierAfter: tierAfter.name,
+      balanceBefore: repData.balanceBefore,
+      balanceAfter: repData.balanceAfter,
+      timestamp: Date.now(),
+    });
+
+    const scoreChange = scoreAfter - scoreBefore;
+    console.log(
+      `[Proxy] ← ${statusCode} | Rep: ${scoreBefore} → ${scoreAfter} | Tier: ${tierAfter.name} | Cost: $${repData.costPerCall}`
+    );
+
+    res.set("X-RepGate-Score", String(scoreAfter));
+    res.set("X-RepGate-Tier", tierAfter.name);
+    res.set("X-RepGate-Cost", String(repData.costPerCall));
+    res.set("X-RepGate-Balance", String(repData.balanceAfter));
+
+    res.status(200).json({
+      data: apiResponse,
+      repgate: {
+        wallet: repData.wallet,
+        reputation: scoreAfter,
+        tier: tierAfter.name,
+        cost_deducted: repData.costPerCall,
+        balance_remaining: Math.round(repData.balanceAfter * 10000) / 10000,
+        next_call_cost: tierAfter.costPerCall,
+      },
+    });
   }
 );
 
 // ─────────────────────────────────────────────────────
-// GET /premium-data — Content Consumption
+// Webhooks
 // ─────────────────────────────────────────────────────
 
-app.get("/premium-data", (req: Request, res: Response) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Unauthorized: Missing Bearer token" });
+// Real Locus webhook endpoint
+app.post("/webhook/locus", handleWebhook);
+
+// Simulate webhook for demo (no real Locus payment needed)
+app.post("/webhook/locus/simulate", handleSimulateWebhook);
+
+// ─────────────────────────────────────────────────────
+// Agent API — Dashboard Data
+// ─────────────────────────────────────────────────────
+
+// Get all agents with reputation scores
+app.get("/api/agents", (_req: Request, res: Response) => {
+  const agents = getTopAgents();
+  const enriched = agents.map((agent) => {
+    const score = getReputation(agent.wallet);
+    const tier = getTier(score);
+    return {
+      ...agent,
+      reputation: score,
+      tier: tier.name,
+      cost_per_call: tier.costPerCall,
+    };
+  });
+  res.json(enriched);
+});
+
+// Get single agent details
+app.get("/api/agents/:wallet", (req: Request, res: Response) => {
+  const wallet = req.params.wallet as string;
+  const agent = getAgent(wallet);
+  if (!agent) {
+    res.status(404).json({ error: "Agent not found" });
+    return;
+  }
+  const score = getReputation(wallet as string);
+  const tier = getTier(score);
+  res.json({
+    ...agent,
+    reputation: score,
+    tier: tier.name,
+    cost_per_call: tier.costPerCall,
+  });
+});
+
+// Get call log for an agent
+app.get("/api/agents/:wallet/log", (req: Request, res: Response) => {
+  const wallet = req.params.wallet as string;
+  res.json(getCallLog(wallet));
+});
+
+// Get recent calls across all agents
+app.get("/api/calls", (_req: Request, res: Response) => {
+  res.json(getRecentCalls());
+});
+
+// Get aggregate stats
+app.get("/api/stats", (_req: Request, res: Response) => {
+  res.json(getAgentStats());
+});
+
+// Seed an agent (for demo — pre-fund Agent B)
+app.post("/api/seed", (req: Request, res: Response) => {
+  const { wallet, stake, successful_calls } = req.body;
+  if (!wallet) {
+    res.status(400).json({ error: "Missing wallet" });
     return;
   }
 
-  const token = authHeader.split(" ")[1];
-  const tx = getTransaction(token);
-
-  if (!tx) {
-    res.status(401).json({ error: "Unauthorized: Invalid token" });
-    return;
+  const agent = ensureAgent(wallet);
+  const stakeAmount = parseFloat(stake) || 0;
+  if (stakeAmount > 0) {
+    addStake(wallet, stakeAmount);
   }
 
-  if (tx.revoked === 1) {
-    res.status(403).json({ error: "Access revoked by human owner." });
-    return;
+  // Simulate successful calls for reputation
+  const calls = parseInt(successful_calls) || 0;
+  if (calls > 0) {
+    const dbModule = require("./db");
+    dbModule.default.prepare("UPDATE agents SET successful_calls = ? WHERE wallet = ?").run(calls, wallet);
   }
 
-  res.status(200).json({
-    status: "SUCCESS",
-    data: {
-      metrics: "Top Secret Alpha Metrics",
-      art: "\\n  _._     _,-'\"\"\\`-._\\n (,-.\\`._,'(       |\\`-e/|\\n     `-.-' \\ )-'( , o o)\\n           `-    \\`_`\"'-\\n      "
-    }
+  const updated = getAgent(wallet)!;
+  const score = getReputation(wallet);
+  const tier = getTier(score);
+
+  console.log(`[Seed] ✅ Agent seeded: ${wallet} | Stake: $${stakeAmount} | Calls: ${calls} | Score: ${score} | Tier: ${tier.name}`);
+
+  res.json({
+    ...updated,
+    reputation: score,
+    tier: tier.name,
+    cost_per_call: tier.costPerCall,
   });
 });
 
 // ─────────────────────────────────────────────────────
-// Dashboard APIs — Live Data
+// SSE — Live Event Stream for Dashboard
 // ─────────────────────────────────────────────────────
-
-app.get("/api/transactions", (req: Request, res: Response) => {
-  res.json(getAllTransactions());
-});
 
 app.get("/api/events", (req: Request, res: Response) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  const onTx = (data: any) => {
+  const onCall = (data: any) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
-  eventBus.on("transaction", onTx);
+  eventBus.on("call", onCall);
 
   req.on("close", () => {
-    eventBus.off("transaction", onTx);
+    eventBus.off("call", onCall);
   });
-});
-
-// ─────────────────────────────────────────────────────
-// GET /revoke — Revoke a transaction by short_code
-// ─────────────────────────────────────────────────────
-
-app.get("/revoke", (req: Request, res: Response) => {
-  const code = req.query.code as string;
-  if (!code) {
-    res.status(400).json({ error: "Missing ?code= parameter" });
-    return;
-  }
-
-  const tx = getTransaction(code);
-  if (!tx) {
-    res.status(404).json({ error: "Transaction not found" });
-    return;
-  }
-
-  if (tx.revoked) {
-    res.status(409).json({ error: "Transaction already revoked", transaction: tx });
-    return;
-  }
-
-  const success = revokeTransaction(code);
-  if (success) {
-    const updatedTx = getTransaction(code);
-    if (updatedTx) eventBus.emit("transaction", updatedTx);
-
-    res.json({
-      status: "REVOKED",
-      short_code: code,
-      message: "Agent access has been revoked.",
-    });
-  } else {
-    res.status(500).json({ error: "Failed to revoke transaction" });
-  }
 });
 
 // ─────────────────────────────────────────────────────
@@ -361,21 +347,26 @@ app.get("/revoke", (req: Request, res: Response) => {
 
 app.listen(config.port, () => {
   console.log(`
-╔══════════════════════════════════════════════════╗
-║    ✦  GLIDE  v3.0                               ║
-║    Human-Aware API Gateway                       ║
-║──────────────────────────────────────────────────║
-║  Port:       ${String(config.port).padEnd(35)}║
-║  Wallet:     ${(config.merchantWallet.slice(0, 10) + "...").padEnd(35)}║
-║  Network:    ${config.baseSepolia.padEnd(35)}║
-║  Facilitator:${config.facilitatorUrl.slice(0, 35).padEnd(35)}║
-║──────────────────────────────────────────────────║
-║  Access Tiers:                                   ║
-║    🤖  No World ID  → slow + $${config.botPrice.replace("$", "").padEnd(19)}║
-║    🧬  World ID     → fast + free                ║
-║    ⚡  World ID+Pay → instant + premium           ║
-║──────────────────────────────────────────────────║
-║  Stack:  World ID + x402 + XMTP                 ║
-╚══════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════╗
+║    ⚡ REPGATE v1.0                                   ║
+║    Reputation-Gated API Gateway                      ║
+║──────────────────────────────────────────────────────║
+║  Port:       ${String(config.port).padEnd(39)}║
+║  Target:     ${config.targetApiUrl.slice(0, 39).padEnd(39)}║
+║  Locus API:  ${(config.locusApiKey ? "✅ Configured" : "❌ Not set").padEnd(39)}║
+║──────────────────────────────────────────────────────║
+║  Tier Pricing:                                       ║
+║    🥉 Bronze (0–20):  $0.01/call  (must stake $1)   ║
+║    🥈 Silver (21–50): $0.005/call                    ║
+║    🥇 Gold   (51+):   $0.001/call                    ║
+║──────────────────────────────────────────────────────║
+║  Endpoints:                                          ║
+║    POST /v1/generate        — Protected API          ║
+║    POST /webhook/locus      — Locus webhook          ║
+║    POST /webhook/locus/sim  — Simulate payment       ║
+║    GET  /api/agents         — Agent leaderboard      ║
+║    GET  /api/events         — Live SSE stream        ║
+║    GET  /                   — Dashboard              ║
+╚══════════════════════════════════════════════════════╝
   `);
 });
