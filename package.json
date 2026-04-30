@@ -1,49 +1,38 @@
 {
-  "name": "@0xshae/glide-gateway",
+  "name": "repgate",
   "version": "1.0.0",
-  "description": "Middleware that verifies World ID and unlocks payments for human-backed agent requests.",
-  "main": "dist/lib.js",
-  "types": "dist/lib.d.ts",
-  "files": [
-    "dist"
-  ],
+  "description": "Reputation-gated API gateway for the agent economy. Agents stake USDC via Locus Checkout and earn lower rates through successful API usage.",
+  "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "demo:bot": "npx tsx scripts/demo-bot.ts",
-    "demo:human": "npx tsx scripts/demo-human.ts",
-    "demo:premium": "npx tsx scripts/demo-premium.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "demo:agent-a": "bash scripts/demo-agent-a.sh",
+    "demo:agent-b": "bash scripts/demo-agent-b.sh",
+    "seed:agent-b": "bash scripts/seed-agent-b.sh"
   },
   "keywords": [
-    "x402",
-    "worldid",
-    "agentkit",
-    "xmtp",
-    "agentic",
+    "reputation",
+    "api-gateway",
+    "locus",
     "checkout",
-    "gateway"
+    "usdc",
+    "agent",
+    "staking"
   ],
   "license": "MIT",
   "dependencies": {
-    "@worldcoin/agentkit": "^0.1.0",
-    "@x402/core": "^2.8.0",
-    "@x402/evm": "^2.8.0",
-    "@x402/express": "^2.8.0",
-    "@x402/fetch": "^2.8.0",
-    "@xmtp/agent-sdk": "^2.2.0",
     "better-sqlite3": "^11.0.0",
     "dotenv": "^16.4.0",
     "express": "^4.21.0",
-    "nanoid": "^3.3.7",
-    "viem": "^2.47.6"
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.7.0"
   }
